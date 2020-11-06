@@ -76,7 +76,7 @@ param
 	
 	# Member Roles 
 	[Parameter(ParameterSetName='Members',Mandatory=$false,HelpMessage="Enter a role for the member to add (Default: EndUser)")]
-	[ValidateSet("Admin", "Auditor", "EndUser", "Owner")]
+	[ValidateSet("Admin", "Auditor", "EndUser", "Owner", "Approver")]
 	[Alias("Role")]
 	[String]$MemberRole = "EndUser",
 	
@@ -109,7 +109,7 @@ $global:InDebug = $PSBoundParameters.Debug.IsPresent
 $global:InVerbose = $PSBoundParameters.Verbose.IsPresent
 
 # Script Version
-$ScriptVersion = "1.6"
+$ScriptVersion = "1.8"
 
 # ------ SET global parameters ------
 # Set Log file path
@@ -493,6 +493,64 @@ Get-Safe -safeName "x0-Win-S-Admins"
 	return $_safe
 }
 
+Function Test-Safe
+{
+<# 
+.SYNOPSIS 
+	Returns the Safe members
+.DESCRIPTION
+	Returns the Safe members
+.PARAMETER SafeName
+	The Safe Name check if exists
+#>
+	param (
+		[Parameter(Mandatory=$true)]
+		[ValidateNotNullOrEmpty()] 
+		[String]$safeName
+	)
+		
+	try{
+		$chkSafeExists = $null
+		$retResult = $false
+		If($g_SafesList -ne $null)
+		{
+			# Check Cached safes list first
+			$chkSafeExists = ($g_SafesList.safename -contains $safename)
+		}
+		Else
+		{
+			# No cache, Get safe details from Vault
+			try{
+				$chkSafeExists = $(Get-Safe -safeName $safeName -ErrAction "SilentlyContinue") -ne $null
+			}
+			catch{
+				$chkSafeExists = $false
+			}
+		}
+		
+		# Report on safe existance
+		If($chkSafeExists -eq $true)
+		{
+			# Safe exists
+			Write-LogMessage -Type Info -MSG "Safe $safeName exists"
+			$retResult = $true
+		}
+		Else
+		{
+			# Safe does not exist
+			Write-LogMessage -Type Warning -MSG "Safe $safeName does not exist"
+			$retResult = $false
+		}
+	}
+	catch
+	{
+		Write-LogMessage -Type Error -MSG $_.Exception -ErrorAction "SilentlyContinue"
+		$retResult = $false
+	}
+	
+	return $retResult
+}
+
 Function Create-Safe
 {
 <#
@@ -544,9 +602,10 @@ If($numDaysRetention -gt -1)
         Write-LogMessage -Type Debug -Msg "Adding the safe $safename to the Vault..."
         $safeadd = Invoke-RestMethod -Uri $URL_Safes -Body ($createSafeBody | ConvertTo-Json) -Method POST -Headers $g_LogonHeader -ContentType "application/json" -TimeoutSec 3600000
 		# Reset cached Safes list
-		Set-Variable -Name g_SafesList -Value $null -Scope Global
+		#Set-Variable -Name g_SafesList -Value $null -Scope Global
 		# Update Safes list to include new safe
-		Get-Safes | out-null
+		#Get-Safes | out-null
+		$g_SafesList += $safeadd.AddSafeResult
     }catch{
 		Throw $(New-Object System.Exception ("Create-Safe: Error adding $safename to the Vault.",$_.Exception))
     }
@@ -685,7 +744,7 @@ Set-SafeMember -safename "Win-Local-Admins" -safemember "Administrator" -memberS
     Param
     (
         [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)]
-        [ValidateScript({((Get-Safes).safename) -contains $_})]
+        [ValidateScript({ Test-Safe -SafeName $_ })]
         $safename,
         [Parameter(Mandatory=$true,ValueFromPipelineByPropertyName=$true)]
         $safeMember,
@@ -952,19 +1011,27 @@ If (Test-CommandExists Invoke-RestMethod)
 							safeName=$line.safename; 
 							safeDescription=$line.description;
 							managingCPM=$line.ManagingCPM;
+							numVersionRetention=$line.numVersionRetention;
+							numDaysRetention=$line.numDaysRetention;
+							EnableOLAC=$line.EnableOLAC;
 						}
-						if([string]::IsNullOrEmpty($parameters.safeDescription))
-						{
-							$parameters.Remove('safeDescription')
+						if([string]::IsNullOrEmpty($parameters.safeDescription)) { $parameters.Remove('safeDescription') }
+						if([string]::IsNullOrEmpty($parameters.ManagingCPM)) { $parameters.Remove('managingCPM') }
+						if([string]::IsNullOrEmpty($parameters.numVersionRetention)) { $parameters.Remove('numVersionRetention') }
+						if([string]::IsNullOrEmpty($parameters.numDaysRetention)) { $parameters.Remove('numDaysRetention') }
+						if([string]::IsNullOrEmpty($parameters.EnableOLAC)) 
+						{ 
+							$parameters.Remove('EnableOLAC') 
 						}
-						if([string]::IsNullOrEmpty($parameters.ManagingCPM))
+						Else
 						{
-							$parameters.Remove('managingCPM')
+							$parameters.EnableOLAC = Convert-ToBool $parameters.EnableOLAC
 						}
 						If($Add)
 						{
 							#If safe doesn't exist, create the new safe
-							if (((Get-Safes).safename) -notcontains $line.safename) {
+							if ((Test-Safe -SafeName $line.safename) -eq $false)
+							{
 								Write-LogMessage -Type Info -Msg "Adding the safe $($line.safename)..."
 								Create-Safe @parameters
 							}
@@ -987,16 +1054,19 @@ If (Test-CommandExists Invoke-RestMethod)
 						
 						If($Delete -eq $False)
 						{
-							# Add permissions to the safe
-							Set-SafeMember -safename $line.safename -safeMember $line.member -updateMember:$UpdateMembers -deleteMember:$DeleteMembers -memberSearchInLocation $line.MemberLocation `
-								-permUseAccounts $(Convert-ToBool $line.UseAccounts) -permRetrieveAccounts $(Convert-ToBool $line.RetrieveAccounts) -permListAccounts $(Convert-ToBool $line.ListAccounts) `
-								-permAddAccounts $(Convert-ToBool $line.AddAccounts) -permUpdateAccountContent $(Convert-ToBool $line.UpdateAccountContent) -permUpdateAccountProperties $(Convert-ToBool $line.UpdateAccountProperties) `
-								-permInitiateCPMManagement $(Convert-ToBool $line.InitiateCPMAccountManagementOperations) -permSpecifyNextAccountContent $(Convert-ToBool $line.SpecifyNextAccountContent) `
-								-permRenameAccounts $(Convert-ToBool $line.RenameAccounts) -permDeleteAccounts $(Convert-ToBool $line.DeleteAccounts) -permUnlockAccounts $(Convert-ToBool $line.UnlockAccounts) `
-								-permManageSafe $(Convert-ToBool $line.ManageSafe) -permManageSafeMembers $(Convert-ToBool $line.ManageSafeMembers) -permBackupSafe $(Convert-ToBool $line.BackupSafe) `
-								-permViewAuditLog $(Convert-ToBool $line.ViewAuditLog) -permViewSafeMembers $(Convert-ToBool $line.ViewSafeMembers) `
-								-permRequestsAuthorizationLevel $line.RequestsAuthorizationLevel -permAccessWithoutConfirmation $(Convert-ToBool $line.AccessWithoutConfirmation) `
-								-permCreateFolders $(Convert-ToBool $line.CreateFolders) -permDeleteFolders $(Convert-ToBool $line.DeleteFolders) -permMoveAccountsAndFolders $(Convert-ToBool $line.MoveAccountsAndFolders)
+							If(![string]::IsNullOrEmpty($line.member))
+							{
+								# Add permissions to the safe
+								Set-SafeMember -safename $line.safename -safeMember $line.member -updateMember:$UpdateMembers -deleteMember:$DeleteMembers -memberSearchInLocation $line.MemberLocation `
+									-permUseAccounts $(Convert-ToBool $line.UseAccounts) -permRetrieveAccounts $(Convert-ToBool $line.RetrieveAccounts) -permListAccounts $(Convert-ToBool $line.ListAccounts) `
+									-permAddAccounts $(Convert-ToBool $line.AddAccounts) -permUpdateAccountContent $(Convert-ToBool $line.UpdateAccountContent) -permUpdateAccountProperties $(Convert-ToBool $line.UpdateAccountProperties) `
+									-permInitiateCPMManagement $(Convert-ToBool $line.InitiateCPMAccountManagementOperations) -permSpecifyNextAccountContent $(Convert-ToBool $line.SpecifyNextAccountContent) `
+									-permRenameAccounts $(Convert-ToBool $line.RenameAccounts) -permDeleteAccounts $(Convert-ToBool $line.DeleteAccounts) -permUnlockAccounts $(Convert-ToBool $line.UnlockAccounts) `
+									-permManageSafe $(Convert-ToBool $line.ManageSafe) -permManageSafeMembers $(Convert-ToBool $line.ManageSafeMembers) -permBackupSafe $(Convert-ToBool $line.BackupSafe) `
+									-permViewAuditLog $(Convert-ToBool $line.ViewAuditLog) -permViewSafeMembers $(Convert-ToBool $line.ViewSafeMembers) `
+									-permRequestsAuthorizationLevel $line.RequestsAuthorizationLevel -permAccessWithoutConfirmation $(Convert-ToBool $line.AccessWithoutConfirmation) `
+									-permCreateFolders $(Convert-ToBool $line.CreateFolders) -permDeleteFolders $(Convert-ToBool $line.DeleteFolders) -permMoveAccountsAndFolders $(Convert-ToBool $line.MoveAccountsAndFolders)
+							}
 						}
 					}
 				}
