@@ -99,7 +99,8 @@ Function Write-LogMessage {
         If ($Header) {
             "=======================================" | Out-File -Append -FilePath $LogFile 
             Write-Host "======================================="
-        } ElseIf ($SubHeader) { 
+        }
+        ElseIf ($SubHeader) { 
             "------------------------------------" | Out-File -Append -FilePath $LogFile 
             Write-Host "------------------------------------"
         }
@@ -132,7 +133,8 @@ Function Write-LogMessage {
                 if ($InDebug -or $InVerbose) {
                     Write-Debug $MSG
                     $msgToWrite += "[DEBUG]`t$Msg"
-                } else {
+                }
+                else {
                     $writeToFile = $False 
                 }
             }
@@ -140,7 +142,8 @@ Function Write-LogMessage {
                 if ($InVerbose) {
                     Write-Verbose $MSG
                     $msgToWrite += "[VERBOSE]`t$Msg"
-                } else {
+                }
+                else {
                     $writeToFile = $False 
                 }
             }
@@ -153,7 +156,8 @@ Function Write-LogMessage {
             "=======================================" | Out-File -Append -FilePath $LogFile 
             Write-Host "======================================="
         }
-    } catch {
+    }
+    catch {
         Write-Error "Error in writing log: $($_.Exception.Message)" 
     }
 }
@@ -180,11 +184,12 @@ if ([string]::IsNullOrEmpty($EPMSetID)) {
     Write-LogMessage -Type Debug -Msg "No EPMSetID passed. Prompting for selection" 
     $Sets = Invoke-RestMethod "$ManagerURL/EPM/API/Sets" -Method 'GET' -Headers $headers
     Write-LogMessage -Type Debug -Msg "EPM - Sets: $Sets"
-    $EPMSetID = ($sets.sets | Select-Object -Property Name, @{Name = "Type"; Expression = {if ($_.SetType -eq 4) {
+    $EPMSetID = ($sets.sets | Select-Object -Property Name, @{Name = "Type"; Expression = { if ($_.SetType -eq 4) {
                     "LCD"
-                } else {
+                }
+                else {
                     "Full"
-                }}
+                } }
         }, id | Out-GridView -OutputMode Single -Title "Select Set to search").id
     Write-LogMessage -Type Info -Msg "Selected EPM SetID: `"$EPMSetID`""
     
@@ -193,7 +198,7 @@ if ([string]::IsNullOrEmpty($EPMSetID)) {
 ##### Need to update logging from here down
 
 try {
-Write-LogMessage -Type verbose -Msg "Invoke-RestMethod `"$ManagerURL/EPM/API/Sets/$EPMSetID/Computers?limit=1&offset=0`" -Method 'GET'"
+    Write-LogMessage -Type verbose -Msg "Invoke-RestMethod `"$ManagerURL/EPM/API/Sets/$EPMSetID/Computers?limit=1&offset=0`" -Method 'GET'"
     $setComputersTotal = (Invoke-RestMethod "$ManagerURL/EPM/API/Sets/$EPMSetID/Computers?limit=1&offset=0" -Method 'GET' -Headers $headers).TotalCount
     Write-LogMessage -Type verbose -Msg "`$setComputersTotal:`n$setComputersTotal"
     $offset = 0
@@ -203,19 +208,21 @@ Write-LogMessage -Type verbose -Msg "Invoke-RestMethod `"$ManagerURL/EPM/API/Set
     Do {
         try {
             Write-LogMessage -Type Verbose -Msg "Current `$Offset is $offset"
-	    Write-LogMessage -Type verbose -Msg "Invoke-RestMethod `"$ManagerURL/EPM/API/Sets/$EPMSetID/Computers?limit=$limit&offset=$offset`" -Method 'GET'"
+            Write-LogMessage -Type verbose -Msg "Invoke-RestMethod `"$ManagerURL/EPM/API/Sets/$EPMSetID/Computers?limit=$limit&offset=$offset`" -Method 'GET'"
             $setOffsetResult = Invoke-RestMethod "$ManagerURL/EPM/API/Sets/$EPMSetID/Computers?limit=$limit&offset=$offset" -Method 'GET' -Headers $headers
             Write-LogMessage -Type verbose -Msg "`$setOffsetResult:`n$setOffsetResult" 
-	    Write-LogMessage -Type Info -Msg "Retrived $($setOffsetResult.Count)"
+            Write-LogMessage -Type Info -Msg "Retrived $($setOffsetResult.Count)"
             $epmComputers += $setOffsetResult.Computers
             $offset += $limit
-        } catch {
+        }
+        catch {
             Write-LogMessage -Type Error -Msg "Error while tooping thru computers"
             $_
             break
         }
     } until ($offset -ge $setComputersTotal)
-} catch {
+}
+catch {
     Write-LogMessage -Type Error -Msg "Error while getting computers"
     $_
     Break
@@ -227,7 +234,8 @@ Write-LogMessage -Type verbose -Msg "Connection to EPM is completed`nAttempting 
 if (!(Get-Module -ListAvailable -Name PSPAS)) {
     Try {
         Install-Module PSPAS -Scope CurrentUser
-    } catch {
+    }
+    catch {
         Write-LogMessage -Type Error -Msg "PSPas was not found and unable to automatically install the module. Please manually install the module and try again."
         Break
     }
@@ -242,7 +250,8 @@ If ($null -eq (Get-PASSession).User) {
     If (![string]::IsNullOrEmpty($logonToken)) {
         Write-LogMessage -Type Debug -Msg "`$LogonToken provided. Attempting to connect with it."
         Use-PASSession $logonToken 
-    } elseIf (![string]::IsNullOrEmpty($IdentityUserName)) {
+    }
+    elseIf (![string]::IsNullOrEmpty($IdentityUserName)) {
         Write-LogMessage -Type Debug -Msg "Identity username provided"  
         IF (!(Test-Path .\IdentityAuth.psm1)) {
             Write-LogMessage -Type Debug -Msg "IdentityAuth.psm1 not found. Attempting to download current version"  
@@ -256,7 +265,8 @@ If ($null -eq (Get-PASSession).User) {
         }
         Use-PASSession $header
         Write-LogMessage -Type Debug -Msg "Successfully Connected"
-    } elseif (![string]::IsNullOrEmpty($PVWAAddress)) {
+    }
+    elseif (![string]::IsNullOrEmpty($PVWAAddress)) {
         Write-LogMessage -Type Debug -Msg "PVWA Address passed. Assuming on-premise connection"
         if ([string]::IsNullOrEmpty($PVWACredentials)) {
             Write-LogMessage -Type Debug -MSG "`$PVWACredentials not passed. Prompting for PAS Credentials"
@@ -269,7 +279,8 @@ If ($null -eq (Get-PASSession).User) {
             Close-PASSession -ErrorAction SilentlyContinue
             Break
         }
-    } else {
+    }
+    else {
         Write-LogMessage -Type Error -Msg "You must enter either a Logon Token, PVWAAddress, or IdentityURL and SubDomain"
         break
     }
@@ -281,16 +292,18 @@ Write-LogMessage -Type verbose -Msg "Running search in PAS for $LCDPUsername"
 $accounts = Get-PASAccount -search $LCDPUsername
 Write-LogMessage -Type verbose -Msg "$($accounts.count) Accounts Found" 
 $pasComputers = @()
-ForEach ($account in $accounts){
+ForEach ($account in $accounts) {
 
     try {
-        if (![string]::IsNullOrEmpty($account.Address)){
+        if (![string]::IsNullOrEmpty($account.Address)) {
             $pasComputers += $account.Address.split(".")[0].ToLower()
-        } else {
+        }
+        else {
             Write-LogMessage -Type Error -Msg "Invalid Address on `"$account`""
         }
-    } catch {
-        Write-LogMessage -Type Error -Msg  "Error on account `"$account`""
+    }
+    catch {
+        Write-LogMessage -Type Error -Msg "Error on account `"$account`""
     }
    
 }
@@ -302,7 +315,7 @@ Write-LogMessage -Type verbose -Msg "$($pasComputers.count) unique addresses fou
 #endregion
 
 #region Compare and add
-[Array]$listToAdd = $epmComputers | Where-Object {$_.ComputerName -notin $pasComputers} | Select-Object -Property ComputerName, ComputerType, Platform, Status, LastSeen
+[Array]$listToAdd = $epmComputers | Where-Object { $_.ComputerName -notin $pasComputers } | Select-Object -Property ComputerName, ComputerType, Platform, Status, LastSeen
 Write-LogMessage -Type Info -Msg "`n$($listToAdd.count) computers exist in EPM but not in PAS"
 $toAdd = @()
 ForEach ($add in $listToAdd) {
@@ -330,7 +343,8 @@ If ($LCDAdd) {
         $count += 1
     }
     Write-LogMessage -Type Info -Msg "`nOnboarded $count accounts`n"
-} else {
+}
+else {
     $Output = @'
 
 To load use the following commands
