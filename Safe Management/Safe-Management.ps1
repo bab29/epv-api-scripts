@@ -47,8 +47,6 @@ param
     [Parameter(ParameterSetName = 'Add', Mandatory = $true)][switch]$Add,
     # Use this switch to Update Safes
     [Parameter(ParameterSetName = 'Update', Mandatory = $true)][switch]$Update,
-    # Use this switch to Add Safe Members
-    [Parameter(ParameterSetName = 'AddMembers', Mandatory = $true)][switch]$AddMembers,
     # Use this switch to Update Safe Members
     [Parameter(ParameterSetName = 'UpdateMembers', Mandatory = $true)][switch]$UpdateMembers,
     # Use this switch to Delete Safe Members
