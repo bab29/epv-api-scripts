@@ -75,12 +75,11 @@ param
     [String]$SafeDescription,
 	
     # Import File support
-    [Parameter(ParameterSetName = 'Add', Mandatory = $false, HelpMessage = "Enter a file path for bulk safe creation")]
-    [Parameter(ParameterSetName = 'Update', Mandatory = $false, HelpMessage = "Enter a file path for bulk safe update")]
-    [Parameter(ParameterSetName = 'AddMembers', Mandatory = $false, HelpMessage = "Enter a file path for bulk safe membership additions")]
-    [Parameter(ParameterSetName = 'UpdateMembers', Mandatory = $false, HelpMessage = "Enter a file path for bulk safe membership update")]
-    [Parameter(ParameterSetName = 'DeleteMembers', Mandatory = $false, HelpMessage = "Enter a file path for bulk safe membership deletion")]
-    [Parameter(ParameterSetName = 'Delete', Mandatory = $false, HelpMessage = "Enter a file path for bulk safe deletion")]
+    [Parameter(ParameterSetName = 'Add', Mandatory = $false, HelpMessage = 'Enter a file path for bulk safe creation')]
+    [Parameter(ParameterSetName = 'Update', Mandatory = $false, HelpMessage = 'Enter a file path for bulk safe update')]
+    [Parameter(ParameterSetName = 'UpdateMembers', Mandatory = $false, HelpMessage = 'Enter a file path for bulk safe membership update')]
+    [Parameter(ParameterSetName = 'DeleteMembers', Mandatory = $false, HelpMessage = 'Enter a file path for bulk safe membership deletion')]
+    [Parameter(ParameterSetName = 'Delete', Mandatory = $false, HelpMessage = 'Enter a file path for bulk safe deletion')]
     [ValidateScript( { Test-Path -Path $_ -PathType Leaf -IsValid })]
     [ValidatePattern( '\.csv$' )]
     [Alias('File')]
@@ -937,7 +936,8 @@ Set-SafeMember -safename "Win-Local-Admins" -safeMember "Administrator" -memberS
         catch {
             if ($rMethodErr.message -like '*User or Group is already a member*') {
                 Write-LogMessage -Type Warning -Msg "The user $safeMember is already a member. Use the update member method instead"
-            } elseif (($rMethodErr.message -like "*User or Group was not found.*") -or ($rMethodErr.message -like "*404*") -or ($rMethodErr.message -like "*hasn't been defined.*") -or ($rMethodErr.message -like "*hasn\u0027t been defined.*") -or ($rMethodErr.message -like "*has not been defined.*")) {   
+            }
+            elseif (($rMethodErr.message -like '*User or Group was not found.*') -or ($rMethodErr.message -like '*404*') -or ($rMethodErr.message -like "*hasn't been defined.*") -or ($rMethodErr.message -like '*has not been defined.*')) {   
 
                 If ($AddOnUpdate) {
                     # Adding a member
@@ -1114,7 +1114,7 @@ If (Test-CommandExists Invoke-RestMethod) {
                 Write-LogMessage -Type Error -Msg "Error retrieving safes. Error: $(Join-ExceptionMessage $_.Exception)"
             }
         }
-        { ($_ -eq "Add") -or ($_ -eq "Update") -or ($_ -eq "AddMembers")-or ($_ -eq "UpdateMembers") -or ($_ -eq "Delete") -or ($_ -eq "DeleteMembers") } {
+        { ($_ -eq 'Add') -or ($_ -eq 'Update') -or ($_ -eq 'UpdateMembers') -or ($_ -eq 'Delete') -or ($_ -eq 'DeleteMembers') } {
             try {
                 if (![string]::IsNullOrEmpty($FilePath)) {
                     # Bulk Import of Safes
