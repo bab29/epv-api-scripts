@@ -30,3 +30,4 @@ Platforms/Update-Platform.psm1
 Migration/Migration via EVD/MigrationviaEVD/.editorconfig
 Migration/Migration via EVD/MigrationviaEVD/.gitattributes
 Migration/Migration via EVD/MigrationviaEVD/GitVersion.yml
+Migration/Migration via EVD/FileList
