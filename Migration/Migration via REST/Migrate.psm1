@@ -805,7 +805,7 @@ To get further information about the paramaters use "Get-Help Sync-Safes -full"
                     }
                 }
             }
-            Start-Sleep -Seconds 0.5
+            Start-Sleep -Seconds 10
         }
         Write-Progress -Id 0 -Completed $true
         # Wait to refresh to not overload gui
