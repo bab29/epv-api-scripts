@@ -15,7 +15,7 @@ function Update-Username {
         if ($srcRemoveDomain -or (![string]::IsNullOrEmpty($dstDomainSuffix))) {
             Write-LogMessage -Type Debug -Msg "[$($safememberCount)] Removing domain from source username `"$($srcMember.membername)`""
             IF ($srcMember.membername -match '@') {
-                $srcMember.membername = $($($srcMember.membername).Split("@"))[0]
+                $srcMember.membername = $($($srcMember.membername).Split('@'))[0]
                 Write-LogMessage -Type Debug -Msg "[$($safememberCount)] Updated username to `"$($srcMember.membername)`""
             }
             else {
@@ -75,7 +75,7 @@ Function Search-Members {
     }
     If ($dstMatchWitoutDomain) {
         ForEach ($username in $dstSafeMembers.membername) {
-            IF ($($username.Split("@")[0]) -in $srcMember.memberName) {
+            IF ($($username.Split('@')[0]) -in $srcMember.memberName) {
                 Write-LogMessage -type Debug "[$($safememberCount)] Removing source domain suffix matched source $($srcMember.memberType.ToLower()) `"$($srcMember.memberName)`" directly to destination $($srcMember.memberType.ToLower()) `"$username`""
                 $result.Found = $true
                 $result.srcUsername = $srcMember.memberName
@@ -149,13 +149,13 @@ Function Invoke-ProcessUser {
             Write-LogMessage -Type Debug -Msg "[$($safememberCount)] Unable to get UPN from AD for  `"$($srcMember.membername)`""
         }
     }
-    if ($srcMember.memberId -match "[A-Z]") {
+    if ($srcMember.memberId -match '[A-Z]') {
         Write-LogMessage -Type Debug -Msg "[$($safememberCount)] Safe Member `"$($srcMember.membername)`" is from PCloud ISPSS"
         Write-LogMessage -Type Debug -Msg "[$($safememberCount)] Attempting to add $($srcMember.MemberType) `"$($srcMember.membername)`" to safe `"$($dstsafe.safename)`""
         $null = New-SafeMember -url $dstPVWAURL -logonHeader $dstToken -safe $safename -safemember $srcMember
         Write-LogMessage -Type Info -Msg "[$($safememberCount)] Safe Member $($srcMember.MemberType) `"$($srcMember.membername)`" added  to safe `"$($dstsafe.safename)`" succesfully"
     }
-    elseif ($srcMember.memberType -eq "User") {
+    elseif ($srcMember.memberType -eq 'User') {
         IF (![string]::IsNullOrEmpty($newDir)) {
             Write-LogMessage -type Debug -MSG "[$($safememberCount)] Safe Member `"$($srcMember.membername)`" is a user and new directory provided, updating `"seachIn`" to `"$newDir`""
             $srcMember | Add-Member NoteProperty searchIn $newDir
@@ -186,11 +186,11 @@ Function Get-SearchIn {
         $srcMember,
         $source
     )
-    If ("vault" -eq $source -and [string]::IsNullOrEmpty($VaultDir)) {
+    If ('vault' -eq $source -and [string]::IsNullOrEmpty($VaultDir)) {
         Write-LogMessage -Type Debug -Msg "[$($safememberCount)] Source is `"vault`" but no directory for vault provided"
         Throw
     }
-    elseif ("vault" -eq $source ) {
+    elseif ('vault' -eq $source ) {
         Write-LogMessage -Type Debug -Msg "[$($safememberCount)] Source is `"$usersource`", updating `"seachIn`" to provided VaultDir of `"$VaultDir`""
         $srcMember | Add-Member NoteProperty searchIn $VaultDir                
         Write-LogMessage -type Debug -MSG "[$($safememberCount)] Safe Member `"$($srcMember.membername)`" attribute `"seachIn`" succesfully set"
@@ -216,7 +216,7 @@ Function Invoke-ProcessGroup {
         $srcMember,
         $dstSafeMembers
     )
-    if ($srcMember.memberId -match "[A-Z]") {
+    if ($srcMember.memberId -match '[A-Z]') {
         Write-LogMessage -Type Debug -Msg "[$($safememberCount)] Safe Member `"$($srcMember.membername)`" is from PCloud ISPSS"
     } 
     Write-LogMessage -Type Debug -Msg "[$($safememberCount)] Safe Member `"$($srcMember.membername)`" is a group, attempting to find source"
@@ -238,7 +238,7 @@ Function Invoke-ProcessGroup {
     IF ($srcMember.membername -match '@') {
         Try {
             Write-LogMessage -Type Debug -Msg "[$($safememberCount)] Removing domain from source username `"$($srcMember.membername)`" and trying again"
-            $srcMember.membername = $($($srcMember.membername).Split("@"))[0]
+            $srcMember.membername = $($($srcMember.membername).Split('@'))[0]
             Write-LogMessage -Type Debug -Msg "[$($safememberCount)] Updated username to `"$($srcMember.membername)`""
             $null = New-SafeMember -url $dstPVWAURL -logonHeader $dstToken -safe $safename -safemember $srcMember
             Write-LogMessage -Type Info -Msg "[$($safememberCount)] Safe Member $($srcMember.MemberType) `"$($srcMember.membername)`" added  to safe `"$($dstsafe.safename)`" succesfully"
@@ -248,14 +248,14 @@ Function Invoke-ProcessGroup {
             Write-LogMessage -Type Debug -Msg "[$($safememberCount)] Safe Member $($srcMember.MemberType) `"$($srcMember.membername)`" faild to added to safe `"$($dstsafe.safename)`""
         }
     }
-    If ($dstToken.Authorization.Contains("Bearer")) {
+    If ($dstToken.Authorization.Contains('Bearer')) {
         Write-LogMessage -Type Debug -Msg "[$($safememberCount)] Destination is from PCloud ISPSS"
         Write-LogMessage -Type Debug -Msg "[$($safememberCount)] Updating MemberType to Role on `"$($srcMember.membername)`""
-        $srcMember.memberType = "Role"
+        $srcMember.memberType = 'Role'
         Write-LogMessage -Type Debug -Msg "[$($safememberCount)] Attempting to add group `"$($srcMember.membername)`" to safe `"$($dstsafe.safename)`" with MemberType of `"Role`""
         $null = New-SafeMember -url $dstPVWAURL -logonHeader $dstToken -safe $safename -safemember $srcMember
     }
-    Throw "Safe Member Update Failed"
+    Throw 'Safe Member Update Failed'
 }
 
 Function Invoke-ProcessRole {
@@ -265,7 +265,7 @@ Function Invoke-ProcessRole {
         $dstSafeMembers
     )
     Write-LogMessage -Type Debug -Msg "[$($safememberCount)] Safe Member `"$($srcMember.membername)`" is a Role."
-    IF ($dstToken.Authorization.Contains("Bearer")) {
+    IF ($dstToken.Authorization.Contains('Bearer')) {
         try {
             Write-LogMessage -Type Debug -Msg "[$($safememberCount)] Attempting to add Role `"$($srcMember.membername)`" to safe `"$($dstsafe.safename)`""
             $null = New-SafeMember -url $dstPVWAURL -logonHeader $dstToken -safe $safename -safemember $srcMember
@@ -280,7 +280,7 @@ Function Invoke-ProcessRole {
         Write-LogMessage -Type Info -Msg "[$($safememberCount)] Destination is not PCLoud ISPSS. Not possible to add as a role. Updating memberType to `"Group`""
     }
     Write-LogMessage -Type Debug -Msg "[$($safememberCount)] Updating memberType to `"Group`""
-    $srcMember.MemberType = "Group"
+    $srcMember.MemberType = 'Group'
     Write-LogMessage -Type Debug -Msg "[$($safememberCount)] Attempting to add Role `"$($srcMember.membername)`" to safe `"$($dstsafe.safename)`" as a group"
     $null = New-SafeMember -url $dstPVWAURL -logonHeader $dstToken -safe $safename -safemember $srcMember
     Write-LogMessage -Type Info -Msg "[$($safememberCount)] Safe Member $($srcMember.MemberType) `"$($srcMember.membername)`" added  to safe `"$($dstsafe.safename)`" succesfully"
@@ -300,7 +300,7 @@ Function Invoke-ProcessSafe {
 
     IF ([string]::IsNullOrEmpty($SafeStatus)) {
         $SafeStatus = @{
-            id                = "Not running as PS Job"
+            id                = 'Not running as PS Job'
             safeName          = $SafeObject.Safename
             success           = $false
             createSkip        = $false
@@ -399,21 +399,21 @@ Function Invoke-ProcessSafe {
                         Write-LogMessage -Type Info -Msg "[$($safememberCount)] Safe Member `"$($srcMember.membername)`" is in the excluded owners list"
                         continue
                     }
-                    if ($srcMember.memberId -match "[_]" -and $srcMember.memberType -eq "Group") {
+                    if ($srcMember.memberId -match '[_]' -and $srcMember.memberType -eq 'Group') {
                         Write-LogMessage -Type Info -Msg "[$($safememberCount)] Safe Member `"$($srcMember.membername)`" is a Role, updating memberType to `"Role`""
-                        $srcMember.memberType = "Role"
+                        $srcMember.memberType = 'Role'
                     }
                     $srcMember = Update-Username -srcMember $srcMember
                     $MemberUpdated = $(Invoke-UpdateMember -srcMember $srcMember -dstSafeMembers $dstSafeMembers)
                     if (!$($MemberUpdated)) {
                         Switch ($($srcMember.memberType)) {
-                            "User" {
+                            'User' {
                                 Invoke-ProcessUser -srcMember $srcMember -dstSafeMembers $dstSafeMembers
                             }
-                            "Group" {
+                            'Group' {
                                 Invoke-ProcessGroup -srcMember $srcMember -dstSafeMembers $dstSafeMembers
                             }
-                            "Role" {
+                            'Role' {
                                 Invoke-ProcessRole -srcMember $srcMember -dstSafeMembers $dstSafeMembers
                             }
                         } 
