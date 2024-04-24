@@ -434,6 +434,9 @@ Function Invoke-ProcessSafe {
         }
     }
     Catch {
+        IF ($SafeStatus.UpdateMembersFail) {
+            $SafeStatus.success = $false
+        }
         $PSItem
         $SafeStatus.error = $PSItem
     }
