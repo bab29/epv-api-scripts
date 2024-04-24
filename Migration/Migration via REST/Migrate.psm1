@@ -836,6 +836,7 @@ To get further information about the paramaters use "Get-Help Sync-Safes -full"
         Write-LogMessage -Type Info "Safes processing failed: $($SafeFailed.success.count)"
         Write-LogMessage -Type Info "Safes membership add or updates failed: $($SafeUpdateMembersFail.success.count)"
     }
+    Receive-Job $Safejob | Remove-Job
     $endTime = Get-Date
     $executionTime = $endTime - $startTime
     Write-LogMessage -Type Info "Sync-Safes took $($executionTime.ToString('hh\:mm\:ss')) to process"
@@ -1374,6 +1375,112 @@ Function Import-DomainList () {
         $results | ForEach-Object { New-DomainEntry -DomainName $PSitem.DomainName -DomainBaseContext $PSitem.DomainBaseContext }
     }
     catch {
-        Write-LogMessage -type Warning -MSG "Error Importing Domain List, manually load directory list using New-DomainEntry"
+        Write-LogMessage -type Warning -MSG 'Error Importing Domain List, manually load directory list using New-DomainEntry'
+    }
+}
+
+function Get-LogSummery {
+    param (
+        # Parameter help description
+        [Parameter(Mandatory = $False)]
+        [string]
+        $FileName = '.\LogSummery.log',
+        [Parameter(Mandatory = $False)]
+        [string]
+        $CSVName = '.\LogSummery.CSV',
+        [Parameter(Mandatory = $False)]
+        [switch]
+        $Output,    
+        [Parameter(Mandatory = $false)]
+        [string]
+        $LogFolderName = '.\'
+    )
+    [pscustomobject[]]$ErrorList = @{}
+    IF (Test-Path -Path $FileName) {
+        Remove-Item $FileName
+    } 
+    Get-ChildItem -Path $LogFolderName -r -Filter '*.log' | ForEach-Object {
+        $Name = $PSItem.Name
+        $data = [io.file]::ReadAllText($PSItem)
+        $errorPattern = [Regex]::new('(?m)^.*\t\[ERROR\]\t{3}.*$')
+        $FoundErrors = $errorPattern.matches($data)
+        IF (![string]::IsNullOrEmpty($FoundErrors)) {
+            $ErrorMessage = ''
+            $ErrorCode = ''
+            $username = ''
+            $address = ''
+            $safe = ''
+            $platformId = ''
+    
+            $errorCodePatPre = [regex]::new('      "ErrorCode": "(?<ErrorCode>.+)".*')
+            $PreErrorCode = $errorCodePatPre.Match($data)
+            IF (![string]::IsNullOrEmpty($PreErrorCode.Groups['ErrorCode'].Value)) {
+                $ErrorCode = $PreErrorCode.Groups['ErrorCode'].Value
+            }
+            $ErrorMessagePatPre = [regex]::new('      "ErrorMessage": "(?<ErrorMessage>.+)".*')
+            $PreErrorMessage = $ErrorMessagePatPre.Match($data)
+            IF (![string]::IsNullOrEmpty($PreErrorMessage.Groups['ErrorMessage'].Value)) {
+                $ErrorMessage = $PreErrorMessage.Groups['ErrorMessage'].Value
+            }
+            $platformPattern = [regex]::new('  "platformId": "(?<platformId>.+)".*')
+            $platformResult = $platformPattern.Match($data)
+            IF (![string]::IsNullOrEmpty($platformResult.Groups['platformId'].Value)) {
+                $platformId = $platformResult.Groups['platformId'].Value
+            }
+    
+            $FoundErrors  | ForEach-Object {
+                $UserNamePat = [regex]::New(' with username "(?<username>.+)" and address ')
+                $addressPat = [regex]::New(' and address "(?<address>.+)" in safe "(?<safe>.+)"')
+                $SafePat = [regex]::New('" in safe "(?<safe>.+)"')
+                $errorCodePat = [regex]::new('.*Error Code: (?<ErrorCode>.+)\s')
+                $ErrorMessagePat = [regex]::new('.*Error Message: (?<ErrorMessage>.+)\s')
+                IF (![string]::IsNullOrEmpty($PSItem)) {
+    
+                    if ([string]::IsNullOrEmpty($ErrorMessage)) {
+                        $ErrMesResult = $ErrorMessagePat.Match($PSItem.Value)
+                        IF (![string]::IsNullOrEmpty($ErrMesResult.Groups['ErrorMessage'].Value)) {
+                            $ErrorMessage = $ErrMesResult.Groups['ErrorMessage'].Value
+                        }
+                    }
+    
+                    If ([string]::IsNullOrEmpty($ErrorCode)) {
+                        $ErrCodeResult = $errorCodePat.Match($PSItem.Value)
+                        IF (![string]::IsNullOrEmpty($ErrCodeResult.Groups['ErrorCode'].Value)) {
+                            $ErrorCode = $ErrCodeResult.Groups['ErrorCode'].Value
+                        }
+                    }
+    
+                    $UsernameResult = $UserNamePat.Match($PSItem.Value)
+                    IF (![string]::IsNullOrEmpty($UsernameResult.Groups['username'].Value)) {
+                        $username = $UsernameResult.Groups['username'].Value
+                    }
+                    $addressResult = $addressPat.Match($PSItem.Value)
+                    IF (![string]::IsNullOrEmpty($addressResult.Groups['address'].Value)) {
+                        $address = $addressResult.Groups['address'].Value
+                    }
+                    $safeResult = $SafePat.Match($PSItem.Value)
+                    IF (![string]::IsNullOrEmpty($safeResult.Groups['safe'].Value)) {
+                        $safe = $safeResult.Groups['safe'].Value
+                    }            
+                }
+            }
+            $ErrorList += [PSCustomObject]@{
+                platformId   = $platformId
+                username     = $username
+                address      = $addres
+                safe         = $safe
+                ErrorCode    = $ErrorCode
+                ErrorMessage = $ErrorMessage            
+            }
+            If (![string]::IsNullOrEmpty($FileName)) {
+                "PlatformID: `"$platformId`" Username: `"$username`" Address: `"$address`" Safe: `"$safe`"  ErrorCode: `"$ErrorCode`" ErrorMessage: `"$ErrorMessage`" Log File: `"$Name`"" | Out-File $FileName -Append -Width 10000
+            } 
+        }
+    }
+    If (![string]::IsNullOrEmpty($CSVName)) {
+        $ErrorList | Sort-Object -Property PlatformID, Safe, Address, Username, ErrorCode, ErrorMessage | Export-Csv $CSVName
+    }
+    If ($Output) {
+        return $ErrorList 
     }
 }
