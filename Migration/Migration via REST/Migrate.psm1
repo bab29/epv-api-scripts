@@ -639,7 +639,7 @@ Switch to prevent running in powershell job
             $global:LOG_FILE_PATH = ".\LogFiles-Safes\$safename.log"
 
             Import-Module -Name ".\CyberArk-Migration.psm1" -Force
-            . '.\Invoke-Process.ps1'
+            . '.\Invoke-ProcessSafe.ps1'
             Function Write-LogMessage {
                 param(
                     [String]$MSG,
@@ -737,7 +737,6 @@ Switch to prevent running in powershell job
                     $i++
                 }
             }
-            
             $SafeFailed.SafeData | Export-Csv .\FailedSafes.csv
         }
         Write-LogMessage -Type Info "Safes succesfully processed: $($SafeSuccess.success.count)"
