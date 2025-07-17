@@ -1,6 +1,6 @@
 if ($PSVersionTable.PSVersion -lt [System.Version]'6.0') {
     Write-Host -ForegroundColor Red "This module must be run in PowerShell 6 or greater required`nUse the following link for instructions on how to download and install the current version of PowerShell`nhttps://learn.microsoft.com/en-us/powershell/scripting/install/installing-powershell-on-windows"
-    Throw
+    throw
 }
 # Script Version
 
@@ -24,18 +24,18 @@ $global:LOG_DATE = $(Get-Date -Format yyyyMMdd) + '-' + $(Get-Date -Format HHmms
     'PVWAAppUser6', 'PVWAUsers', 'PVWAMonitor', 'PSMUsers', 'PSMAppUsers', 'PTAUser', 'Administrator', 'PSMAppUsers', 'Export')
 
 Import-Module -Name '.\CyberArk-Migration.psm1' -Force
-. .\Invoke-Process.ps1
+. .\Invoke-ProcessSafe.ps1
 
 function Initialize-Function {
     [CmdletBinding()]
     param ()
     $global:InDebug = $PSBoundParameters.Debug.IsPresent
     $global:InVerbose = $PSBoundParameters.Verbose.IsPresent
-    IF (2 -lt (Get-PSCallStack).count) {
-        IF (!$global:InDebug) {
+    if (2 -lt (Get-PSCallStack).count) {
+        if (!$global:InDebug) {
             Set-Variable -Scope Global -Name InDebug -Value (Get-Variable -Scope 1 -Name PSBoundParameters -ValueOnly).Debug.IsPresent
         }
-        If (!$global:InVerbose) {
+        if (!$global:InVerbose) {
             Set-Variable -Scope Global -Name InVerbose -Value (Get-Variable -Scope 1 -Name PSBoundParameters -ValueOnly).Verbose.IsPresent -ErrorAction SilentlyContinue
         }
     }
@@ -43,16 +43,16 @@ function Initialize-Function {
 
 }
 
-Function Get-CPMUsers {
+function Get-CPMUsers {
     [OutputType([System.Boolean])]
     [CmdletBinding()]
     [OutputType([String[]])]
-    param([switch]$SuppressCPMWarning)    
+    param([switch]$SuppressCPMWarning)
     $URL_GetCPMList = "$script:srcPVWAURL/API/ComponentsMonitoringDetails/CPM/"
-    Try {
+    try {
         $CPMList = Invoke-RestMethod -Method Get -Uri $URL_GetCPMList -Headers $Script:srcToken -ErrorVariable ErrorCPMList
-        IF ([string]::IsNullOrEmpty($CPMList.ComponentsDetails.ComponentUSername)) {
-            If (!$SuppressCPMWarning) {
+        if ([string]::IsNullOrEmpty($CPMList.ComponentsDetails.ComponentUSername)) {
+            if (!$SuppressCPMWarning) {
                 Write-Warning "Unable to retrieve list of CPM users. Ensure that CPMList parameter has been passed or source CPM is named `"PasswordManager`"" -WarningAction Inquire
             }
             return @()
@@ -64,18 +64,18 @@ Function Get-CPMUsers {
         }
     }
     catch [Microsoft.PowerShell.Commands.HttpResponseException] {
-        If ($PSitem.Exception.Response.StatusCode -eq 'Forbidden') {
+        if ($PSitem.Exception.Response.StatusCode -eq 'Forbidden') {
             $URL_Verify = "$script:srcPVWAURL/API/Verify/"
             $ReturnResultUser = Invoke-RestMethod -Method Get -Uri $URL_Verify -Headers $logonToken -ErrorVariable RestErrorUser
-            IF ([string]::IsNullOrEmpty($ReturnResultUser.ServerName) -or [string]::IsNullOrEmpty(!$RestErrorUser)) {
-                If (!$SuppressCPMWarning) {
+            if ([string]::IsNullOrEmpty($ReturnResultUser.ServerName) -or [string]::IsNullOrEmpty(!$RestErrorUser)) {
+                if (!$SuppressCPMWarning) {
                     Write-Warning "Unable to retrieve list of CPM users. Ensure that CPMList parameter has been passed or source CPM is named `"PasswordManager`"" -WarningAction Inquire
                 }
                 return @()
             }
             else {
                 Write-Warning "Connected with a account that is not a member of `"vault admins`""
-                If (!$SuppressCPMWarning) {
+                if (!$SuppressCPMWarning) {
                     Write-Warning "Unable to retrieve list of CPM users. Ensure that CPMList parameter has been passed or source CPM is named `"PasswordManager`"" -WarningAction Inquire
                 }
                 return @()
@@ -84,26 +84,26 @@ Function Get-CPMUsers {
     }
 }
 
-Function Test-Session {
+function Test-Session {
     [OutputType([System.Boolean])]
     [CmdletBinding()]
     param(
         $logonToken,
         $url
     )
-    Function Invoke-Report {
+    function Invoke-Report {
         Write-LogMessage -type Debug -MSG "Error Message attempting to do admin connection: $($RestErrorAdmin.ErrorRecord)"
-        IF ([string]::IsNullOrEmpty(!$($RestErrorUser))) {
+        if ([string]::IsNullOrEmpty(!$($RestErrorUser))) {
             Write-LogMessage -type Debug -MSG "Error Message attempting to do user connection: $($RestErrorUser.ErrorRecord)"
         }
     }
 
     $URL_GetHealthSummery = "$url/API/ComponentsMonitoringSummary/"
-    Try {
+    try {
         $ReturnResultAdmin = Invoke-RestMethod -Method Get -Uri $URL_GetHealthSummery -Headers $logonToken -ErrorVariable RestErrorAdmin
         Write-LogMessage -type Verbose -MSG "Test-Session:ReturnResult: $($ReturnResultAdmin|ConvertTo-Json -Depth 9 -Compress)"
         if ((![string]::IsNullOrEmpty($ReturnResultAdmin.Components)) -and ($ReturnResultAdmin.Components.Count -ne 0)) {
-            Return $true
+            return $true
         }
         else {
             Invoke-Report
@@ -111,42 +111,42 @@ Function Test-Session {
         }
     }
     catch [Microsoft.PowerShell.Commands.HttpResponseException] {
-        If ($PSitem.Exception.Response.StatusCode -eq 'Forbidden') {
+        if ($PSitem.Exception.Response.StatusCode -eq 'Forbidden') {
             $URL_Verify = "$url/API/Verify/"
             $ReturnResultUser = Invoke-RestMethod -Method Get -Uri $URL_Verify -Headers $logonToken -ErrorVariable RestErrorUser
-            IF ([string]::IsNullOrEmpty($ReturnResultUser.ServerName) -or [string]::IsNullOrEmpty(!$RestErrorUser)) {
+            if ([string]::IsNullOrEmpty($ReturnResultUser.ServerName) -or [string]::IsNullOrEmpty(!$RestErrorUser)) {
                 Invoke-Report
-                Return $false
+                return $false
             }
             else {
                 Invoke-Report
                 Write-LogMessage -type Warning -MSG "`tConnected with a account that is not a member of `"vault admins`". Access to some functions may be restricted."
-                Return $true
+                return $true
             }
         }
     }
 }
 function Test-AccountList {
-    If ([string]::IsNullOrEmpty($($script:AccountList))) {
+    if ([string]::IsNullOrEmpty($($script:AccountList))) {
         Write-LogMessage -type Warning -MSG 'No accounts found, attempting import of accounts using default settings'
         Import-Accounts
-        If ([string]::IsNullOrEmpty($($script:AccountList))) {
+        if ([string]::IsNullOrEmpty($($script:AccountList))) {
             Write-LogMessage -type ErrorThrow -MSG 'No accounts found after import attempt'
-            Throw 'No accounts found after import attempt'
+            throw 'No accounts found after import attempt'
         }
     }
 }
 function Test-SessionsValid {
-    If (!(Test-SourceSession)) {
+    if (!(Test-SourceSession)) {
         $SessionFailed = $true
         Write-LogMessage -type Error -MSG "Source Session Test Failed. Run `"New-SourceSession`" to create a new session to the source environment"
     }
-    IF (!(Test-DestinationSession)) {
+    if (!(Test-DestinationSession)) {
         $SessionFailed = $true
         Write-LogMessage -type Error -MSG "Destination Session Test Failed. Run `"New-DestinationSession`" to create a new session to the destination environment"
     }
-    If ($SessionFailed) {
-        Throw 'Tests to environment(s) failed'
+    if ($SessionFailed) {
+        throw 'Tests to environment(s) failed'
     }
 }
 function New-SourceSession {
@@ -208,7 +208,7 @@ function New-SourceSession {
     Test-PVWA -PVWAURL $srcPVWAURL
 
     Write-LogMessage -type Info -MSG 'Getting Source Logon Tokens'
-    If (![string]::IsNullOrEmpty($srcLogonToken)) {
+    if (![string]::IsNullOrEmpty($srcLogonToken)) {
         if ($srcLogonToken.GetType().name -eq 'String') {
             $logonHeader = @{Authorization = $srcLogonToken }
             Set-Variable -Scope script -Name srcToken -Value $logonHeader
@@ -218,7 +218,7 @@ function New-SourceSession {
         }
     }
     else {
-        If (![string]::IsNullOrEmpty($srcPVWACredentials)) {
+        if (![string]::IsNullOrEmpty($srcPVWACredentials)) {
             $creds = $srcPVWACredentials
         }
         else {
@@ -235,7 +235,7 @@ function New-SourceSession {
             Set-Variable -Scope Script -Name srcToken -Value $(Get-Logon -Credentials $creds -AuthType $srcAuthType -URL $srcPVWAURL )
         }
         # Verify that we successfully logged on
-        If ([string]::IsNullOrEmpty($srcToken)) {
+        if ([string]::IsNullOrEmpty($srcToken)) {
             Write-LogMessage -type Error -MSG 'No Source Credentials were entered' -Footer
             return # No logon header, end script
         }
@@ -247,22 +247,22 @@ function New-SourceSession {
         Write-LogMessage -type Debug -MSG "Source Token set to $($srcToken|ConvertTo-Json -Depth 10)"
     }
     else {
-        Throw 'Source session failed to connect successfully'
+        throw 'Source session failed to connect successfully'
     }
 }
-Function Close-SourceSession {
+function Close-SourceSession {
     Initialize-Function
     Invoke-Logoff -url $srcPVWAURL -logonHeader $srcToken -ErrorAction SilentlyContinue
 }
-Function Test-SourceSession {
+function Test-SourceSession {
     [OutputType([System.Boolean])]
     [CmdletBinding()]
     param()
-    If ([string]::IsNullOrEmpty($Script:srcToken) -or [string]::IsNullOrEmpty($Script:srcPVWAURL)) {
+    if ([string]::IsNullOrEmpty($Script:srcToken) -or [string]::IsNullOrEmpty($Script:srcPVWAURL)) {
         return $false
     }
     else {
-        Return Test-Session -logonToken $Script:srcToken -url $Script:srcPVWAURL
+        return Test-Session -logonToken $Script:srcToken -url $Script:srcPVWAURL
     }
 }
 function New-DestinationSession {
@@ -325,7 +325,7 @@ function New-DestinationSession {
     Test-PVWA -PVWAURL $dstPVWAURL
 
     Write-LogMessage -type Info -MSG 'Getting Destination Logon Tokens'
-    If (![string]::IsNullOrEmpty($dstlogonToken)) {
+    if (![string]::IsNullOrEmpty($dstlogonToken)) {
         if ($dstlogonToken.GetType().name -eq 'String') {
             $logonHeader = @{Authorization = $dstlogonToken }
             Set-Variable -Scope Script -Name dstToken -Value $logonHeader
@@ -335,7 +335,7 @@ function New-DestinationSession {
         }
     }
     else {
-        If (![string]::IsNullOrEmpty($dstPVWACredentials)) {
+        if (![string]::IsNullOrEmpty($dstPVWACredentials)) {
             $creds = $dstPVWACredentials
         }
         else {
@@ -352,7 +352,7 @@ function New-DestinationSession {
             Set-Variable -Scope script -Name dstToken -Value $(Get-Logon -Credentials $creds -AuthType $dstAuthType -URL $dstPVWAURL )
         }
         # Verify that we successfully logged on
-        If ($null -eq $script:dstToken) {
+        if ($null -eq $script:dstToken) {
             Write-LogMessage -type Error -MSG 'No Destination Credentials were entered' -Footer
             return # No logon header, end script
         }
@@ -371,15 +371,15 @@ function New-DestinationSession {
 function Close-DestinationSession {
     Invoke-Logoff -url $dstPVWAURL -logonHeader $dstToken -ErrorAction SilentlyContinue
 }
-Function Test-DestinationSession {
+function Test-DestinationSession {
     [OutputType([System.Boolean])]
     [CmdletBinding()]
     param()
-    If ([string]::IsNullOrEmpty($Script:dstToken) -or [string]::IsNullOrEmpty($Script:dstPVWAURL)) {
+    if ([string]::IsNullOrEmpty($Script:dstToken) -or [string]::IsNullOrEmpty($Script:dstPVWAURL)) {
         return $false
     }
     else {
-        Return Test-Session -logonToken $Script:dstToken -url $Script:dstPVWAURL
+        return Test-Session -logonToken $Script:dstToken -url $Script:dstPVWAURL
     }
 }
 function Export-Accounts {
@@ -401,17 +401,17 @@ function Export-Accounts {
     Write-LogMessage -type Info -MSG 'Starting export of accounts'
     $srcAccounts = Get-Accounts -url $srcPVWAURL -logonHeader $srcToken -limit 1000
     Write-LogMessage -type Info -MSG "Found $($srcAccounts.count) accounts"
-    $remove = $srcAccounts | Where-Object { $_.safename -In $objectSafesToRemove }
+    $remove = $srcAccounts | Where-Object { $_.safename -in $objectSafesToRemove }
     Write-LogMessage -type Info -MSG "Found $($remove.count) accounts in excluded safes and removing from list"
-    $srcAccounts = $srcAccounts | Where-Object { $_.safename -notIn $objectSafesToRemove }
+    $srcAccounts = $srcAccounts | Where-Object { $_.safename -notin $objectSafesToRemove }
     Write-LogMessage -type Info -MSG "Starting export to CSV of $($srcAccounts.count) accounts"
     $srcAccounts | `
-        Where-Object { $_.safename -notIn $objectSafesToRemove } | `
+        Where-Object { $_.safename -notin $objectSafesToRemove } | `
         Select-Object 'name', 'address', 'userName', 'safeName', 'platformId', 'id', @{ name = 'PasswordLastChangeUTC'; Expression = { "$((([System.DateTimeOffset]::FromUnixTimeSeconds($_.secretManagement.lastModifiedTime)).DateTime).ToString())" } } |`
         Export-Csv -Path $exportCSV -NoTypeInformation
     Write-LogMessage -type Info -MSG "Export of $($srcAccounts.count) accounts completed. All other switches will be ignored"
 }
-Function Import-Accounts {
+function Import-Accounts {
     # .SYNOPSIS
     # Import a list of accounts to be used by Sync-Safe and Sync-Accounts
     # .DESCRIPTION
@@ -427,14 +427,14 @@ Function Import-Accounts {
     )
     [array]$script:AccountList = Import-Csv $importCSV -ErrorAction SilentlyContinue
     Write-LogMessage -type Info -MSG "Imported $($script:AccountList.count) accounts from `"$importCSV`""
-    IF ($global:SuperVerbose) {
+    if ($global:SuperVerbose) {
         Write-LogMessage -type Verbose -MSG "SuperVerbose: Imported Accounts: $($script:AccountList |ConvertTo-Json -Depth 9 -Compress)"
     }
 }
-Function Get-Accountlist {
+function Get-Accountlist {
     $script:AccountList
 }
-Function Set-AccountList {
+function Set-AccountList {
     param (
         <#
     New Account list
@@ -445,11 +445,11 @@ Function Set-AccountList {
     Set-Variable -Scope Script -Name AccountList -Value $newAccountList
 
 }
-Function Clear-Accountlist {
+function Clear-Accountlist {
     Remove-Variable -Scope Script -Name AccountList -ErrorAction SilentlyContinue
 }
 
-Function Sync-Safes {
+function Sync-Safes {
     <#
     .SYNOPSIS
     Synchronizes the safes between the two environments
@@ -567,7 +567,7 @@ Switch to prevent running in powershell job
     Initialize-Function
     Test-SessionsValid
     Test-AccountList
-    $global:DomainList = $script:DomainList 
+    $global:DomainList = $script:DomainList
     #region Safe Work
 
     $cpmUsers = Get-CPMUsers -SuppressCPMWarning:$SuppressCPMWarning
@@ -587,7 +587,7 @@ Switch to prevent running in powershell job
 
     [array]$safeobjects += $script:AccountList | `
         Select-Object -Property safeName -Unique | `
-        Where-Object { $_.safename -notIn $SafesToRemove } | `
+        Where-Object { $_.safename -notin $SafesToRemove } | `
         ForEach-Object { $PSItem }
 
     Write-LogMessage -type Info -MSG "Found $($safeobjects.count) unique safes for processing"
@@ -603,28 +603,32 @@ Switch to prevent running in powershell job
     $ownersToRemove = $script:ownersToRemove
     $ownersToRemove += $CPMList
     $ownersToRemove += $cpmUsers
-    If (![String]::IsNullOrEmpty($OwnersToExclude)) {
+    if (![String]::IsNullOrEmpty($OwnersToExclude)) {
         $ownersToRemove += $OwnersToExclude
     }
 
     Write-LogMessage -type Debug "$($ownersToRemove.Count) owners in owners to remove list"
     Write-LogMessage -type Verbose "$($ownersToRemove|ConvertTo-Json -Depth 9 -Compress)"
 
-    New-Item -ItemType Directory -Force -Path .\LogFiles-Safes\ | Out-Null
+    $today = Get-Date -Format 'yyyyMMdd-HHmmss'
+    $SafesLogPath = ".\LogFiles-Safes-$today"
+    New-Item -ItemType Directory -Force -Path $SafesLogPath | Out-Null
     $safeProgress = @{}
     $safeobjects | ForEach-Object { $safeProgress.($_.id) = @{} }
     $safeProgressSync = [System.Collections.Hashtable]::Synchronized($safeProgress)
     Write-LogMessage -type Info -MSG "Setup of safe job object completed. Starting to submit jobs at $(Get-Date -Format 'HH:mm:ss')."
     #region ForEach-Object
-    If (($([Version]$PSVersionTable.PSVersion).Major -le 5) -or $RunSingle ) {
+    if (($([Version]$PSVersionTable.PSVersion).Major -le 5) -or $RunSingle ) {
         Write-LogMessage -type Info -MSG 'Processing Safes one at a a time'
         $safeobjects | ForEach-Object {
+            $global:safename = $PSItem.Safename
+            $global:LOG_FILE_PATH = "$SafesLogPath\$($PSItem.Safename).log"
             Invoke-ProcessSafe -SafeName $PSItem.Safename
         }
     }
     else {
         Write-LogMessage -type Info -MSG 'Processing Safes using PowerShell Jobs'
-        If ([string]::IsNullOrEmpty($SuperVerbose)) {
+        if ([string]::IsNullOrEmpty($SuperVerbose)) {
             $SuperVerbose = $false
         }
         $safeJob = $safeobjects | ForEach-Object -ThrottleLimit $maxJobCount -AsJob -Parallel {
@@ -640,6 +644,7 @@ Switch to prevent running in powershell job
             $objectSafesToRemove = $Using:objectSafesToRemove
             $ownersToRemove = $using:ownersToRemove
             $DomainList = $using:DomainList
+            $SafesLogPath = $using:SafesLogPath
 
             $CreateSafes = $using:CreateSafes
             $UpdateSafeMembers = $using:UpdateSafeMembers
@@ -655,18 +660,18 @@ Switch to prevent running in powershell job
 
 
             $global:safename = $($PSItem.safeName)
-            $global:LOG_FILE_PATH = ".\LogFiles-Safes\$safename.log"
+            $global:LOG_FILE_PATH = "$SafesLogPath\$safename.log"
 
             Import-Module -Name '.\CyberArk-Migration.psm1' -Force
-            . '.\Invoke-Process.ps1'
-            Function Write-LogMessage {
+            . '.\Invoke-ProcessSafe.ps1'
+            function Write-LogMessage {
                 param(
                     [String]$MSG,
                     [Switch]$NoWrite,
                     [String]$type
                 )
                 $SafeStatus.log += "`[$safename`] $msg"
-                If ('error' -eq $type) {
+                if ('error' -eq $type) {
                     $SafeStatus.Error += $MSG
                 }
                 if (!$NoWrite) {
@@ -695,61 +700,84 @@ Switch to prevent running in powershell job
             }
             #endregion Setup Logging
             #endregion Setup for Using
-            Try {
+            try {
                 #region Actual work
                 Invoke-ProcessSafe -SafeName $safename -SafeStatus $SafeStatus
                 #endregion Actual work
                 #endregion ForEach-Object
             }
-            Finally {
+            finally {
                 Write-LogMessage -type Info -MSG "Completed work with safe `"$safename`""
-                If ($SuperVerbose) {
+                if ($SuperVerbose) {
                     Write-LogMessage -type Verbose -MSG "SuperVerbose: Final `$SafeStatus $($SafeStatus | ConvertTo-Json -Compress)"
                 }
                 else {
                     Write-LogMessage -type Verbose -MSG "Final `$SafeStatus $($SafeStatus |Select-Object -Property Id,SafeName,createSkip,Success,UpdateMembersFail | ConvertTo-Json -Depth 1 -Compress)"
-                } 
+                }
                 $SafeStatus
                 $process.Completed = $true
             }
         }
         Write-LogMessage -type Info -MSG "Submission of $($safeJob.ChildJobs.Count) jobs completed at $(Get-Date -Format 'HH:mm:ss'). Maxiumn running PowerShell jobs set to $maxJobCount."
+        Write-LogMessage -type Info -MSG "Press Ctrl+C to cancel processing and output list of skipped items"
         $PSStyle.Progress.View = 'Classic'
+        $cancelled = $false
         while ($safeJob.State -eq 'Running') {
-            $safeProgressSync.Keys | ForEach-Object {
-                if (![string]::IsNullOrEmpty($safeProgressSync.$_.keys)) {
-                    if (!$SuppressProgress) {
-                        $completed = $($safeJob.ChildJobs | Where-Object { $_.State -eq 'Completed' }).count
-                        $total = $safeJob.ChildJobs.count
-                        $Precent = ($completed / $total) * 100
-                        $process = @{}
-                        $process.Id = 0
-                        $process.Activity = 'Processing Safes'
-                        $process.Status = "$completed out of $total jobs completed"
-                        $process.PercentComplete = $Precent
-                        Write-Progress @process
-                        if ($ProgressDetails.IsPresent) {
-                            $param = $safeProgressSync.$_
-                            $param.ParentId = 0
-                            Write-Progress @param
+            try {
+                $safeProgressSync.Keys | ForEach-Object {
+                    if (![string]::IsNullOrEmpty($safeProgressSync.$_.keys)) {
+                        if (!$SuppressProgress) {
+                            $completed = $($safeJob.ChildJobs | Where-Object { $_.State -eq 'Completed' }).count
+                            $total = $safeJob.ChildJobs.count
+                            $Precent = ($completed / $total) * 100
+                            $process = @{}
+                            $process.Id = 0
+                            $process.Activity = 'Processing Safes'
+                            $process.Status = "$completed out of $total jobs completed (Press Ctrl+C to cancel)"
+                            $process.PercentComplete = $Precent
+                            Write-Progress @process
+                            if ($ProgressDetails.IsPresent) {
+                                $param = $safeProgressSync.$_
+                                $param.ParentId = 0
+                                Write-Progress @param
+                            }
                         }
                     }
                 }
+                Start-Sleep -Seconds 0.5
             }
-            Start-Sleep -Seconds 0.5
+            catch [System.OperationCanceledException] {
+                Write-LogMessage -type Warning -MSG "Cancellation requested by user. Stopping remaining jobs..."
+                $cancelled = $true
+                Stop-Job $safeJob -PassThru | Remove-Job
+                break
+            }
         }
         Write-Progress -Id 0 -Completed $true
         # Wait to refresh to not overload gui
         Write-LogMessage -type Info 'All safes processed, generating results'
 
         $($SafeReport = Receive-Job $Safejob -Keep) 6> $null 5> $null 4> $null 3> $null 2> $null 1> $null
-        $SafeSuccess = $SafeReport | Where-Object { ($PSItem.success -EQ $true) -and ($PSItem.createSkip -eq $false) }
-        $SafeCreateSkip = $SafeReport | Where-Object { ($PSItem.success -EQ $true) -and ($PSItem.createSkip -eq $true) }
-        $SafeFailed = $SafeReport | Where-Object { $PSItem.success -EQ $false }
-        $SafeUpdateMembersFail = $SafeReport | Where-Object { $PSItem.UpdateMembersFail -EQ $true }
-        If (![string]::IsNullOrEmpty($SafeFailed)) {
+        $SafeSuccess = $SafeReport | Where-Object { ($PSItem.success -eq $true) -and ($PSItem.createSkip -eq $false) }
+        $SafeCreateSkip = $SafeReport | Where-Object { ($PSItem.success -eq $true) -and ($PSItem.createSkip -eq $true) }
+        $SafeFailed = $SafeReport | Where-Object { $PSItem.success -eq $false }
+        $SafeUpdateMembersFail = $SafeReport | Where-Object { $PSItem.UpdateMembersFail -eq $true }
+
+        # Handle cancelled jobs - create list of skipped safes
+        if ($cancelled) {
+            $completedSafeIds = $SafeReport | ForEach-Object { $_.id }
+            $skippedSafes = $safeobjects | Where-Object { $_.id -notin $completedSafeIds }
+            if ($skippedSafes.Count -gt 0) {
+                Write-LogMessage -type Warning -MSG "Processing was cancelled. $($skippedSafes.Count) safes were skipped."
+                $skippedSafes | Add-Member -MemberType NoteProperty -Name SkipReason -Value "Processing cancelled by user" -Force
+                $skippedSafes | Export-Csv .\SkippedSafes.csv -NoTypeInformation
+                Write-LogMessage -type Info -MSG "List of skipped safes exported to `".\SkippedSafes.csv`""
+            }
+        }
+
+        if (![string]::IsNullOrEmpty($SafeFailed)) {
             $SafeFailed.SafeData | Add-Member -MemberType NoteProperty -Name FailReason -Value $null -Force
-            If ($SafeFailed.SafeData.count -eq 1) {
+            if ($SafeFailed.SafeData.count -eq 1) {
                 $SafeFailed.SafeData.FailReason = $SafeFailed.Error
             }
             else {
@@ -759,13 +787,16 @@ Switch to prevent running in powershell job
                     $i++
                 }
             }
-            
+
             $SafeFailed.SafeData | Export-Csv .\FailedSafes.csv
         }
         Write-LogMessage -type Info "Safes succesfully processed: $($SafeSuccess.success.count)"
         Write-LogMessage -type Info "Safes creation skipped: $($SafeCreateSkip.success.count)"
         Write-LogMessage -type Info "Safes processing failed: $($SafeFailed.success.count)"
         Write-LogMessage -type Info "Safes membership add or updates failed: $($SafeUpdateMembersFail.success.count)"
+        if ($cancelled) {
+            Write-LogMessage -type Warning "Safes skipped due to cancellation: $($skippedSafes.Count)"
+        }
     }
     Write-LogMessage -type Info "Processing of safes completed at $(Get-Date -Format 'HH:mm:ss')"
 }
@@ -784,6 +815,7 @@ Using the variable AccountList to target specific accounts connects to two envir
 - Unless SkipCheckSecret is passed, for each existing account found, verify that the secret matches between the source and destination
     - Whenever possible ensures that secrets for both the source and destination are stored in variables as SecureStrings and only retained for as long as needed and then removed.
 - If getRemoteMachines is passed, update the destination account with the values from the source account
+- If SyncAccountProperties is passed, synchronize account properties (platformId, management settings, platform-specific properties) to make destination accounts match source accounts
 
 Prior to running ensure the following items in both environments are set
 - CPMs stopped in both environments
@@ -856,6 +888,13 @@ To get further information about the paramaters use "Get-Help Sync-Accounts -ful
         [Parameter(Mandatory = $false)]
         [Switch]$VerifyPlatform,
         <#
+        Synchronize account properties to make destination accounts match source accounts
+        - Updates platformId, management settings, and platform-specific properties
+        - Default: False (disabled)
+        #>
+        [Parameter(Mandatory = $false)]
+        [Switch]$SyncAccountProperties,
+        <#
         The amount of jobs that should be running at one time
         #>
         [Parameter(Mandatory = $false)]
@@ -879,7 +918,7 @@ To get further information about the paramaters use "Get-Help Sync-Accounts -ful
     Test-AccountList
     Write-LogMessage -type debug -MSG 'All tests passed'
 
-    IF ($VerifyPlatform) {
+    if ($VerifyPlatform) {
         Write-LogMessage -type Info -MSG 'VerifyPlatform set, retriving platforms for destination environment'
         $platforms = (Get-Platforms -url $dstPVWAURL -logonHeader $dstToken)
         Write-LogMessage -type debug -MSG "$($platforms.count) platforms retrieved from destination environment"
@@ -904,7 +943,7 @@ To get further information about the paramaters use "Get-Help Sync-Accounts -ful
     $accountobjects | ForEach-Object { $accountProgress.($_.ProcessID) = @{} }
     $accountProgressSync = [System.Collections.Hashtable]::Synchronized($accountProgress)
     Write-LogMessage -type Debug -MSG "Setup of account object completed. Starting to submit jobs at $(Get-Date -Format 'HH:mm:ss')."
-    Try {
+    try {
         $AccountJob = $accountobjects | ForEach-Object -ThrottleLimit $maxJobCount -AsJob -Parallel {
 
 
@@ -917,7 +956,8 @@ To get further information about the paramaters use "Get-Help Sync-Accounts -ful
             $noCreate = $using:noCreate
             $allowEmpty = $using:allowEmpty
             $VerifyPlatform = $using:VerifyPlatform
-            If ($using:VerifyPlatform) {
+            $SyncAccountProperties = $using:SyncAccountProperties
+            if ($using:VerifyPlatform) {
                 $platforms = $using:platforms
             }
 
@@ -934,14 +974,14 @@ To get further information about the paramaters use "Get-Help Sync-Accounts -ful
             Import-Module .\CyberArk-Migration.psm1 -Force
 
             #endregion
-            Function Write-LogMessage {
+            function Write-LogMessage {
                 param(
                     [String]$MSG,
                     [Switch]$NoWrite,
                     [String]$type
                 )
                 $AccountStatus.log += "`[$accountID`] $msg"
-                If (('error' -eq $type) -or ('Warning' -eq $type) ) {
+                if (('error' -eq $type) -or ('Warning' -eq $type) ) {
                     $AccountStatus.Error += $MSG
                 }
                 if (!$NoWrite) {
@@ -950,7 +990,7 @@ To get further information about the paramaters use "Get-Help Sync-Accounts -ful
                 }
             }
 
-            Try {
+            try {
 
                 $syncCopy = $using:accountProgressSync
                 $process = $syncCopy.$($baseAccount.ProcessID)
@@ -970,7 +1010,7 @@ To get further information about the paramaters use "Get-Help Sync-Accounts -ful
                 $dstAccountFound = $false
 
                 Write-LogMessage -type Info -MSG "Working with source account with username `"$($baseAccount.userName)`" and address `"$($baseAccount.address)`" in safe `"$($baseAccount.safeName)`""
-                Try {
+                try {
                     $srcAccount = Get-AccountDetail -url $srcPVWAURL -logonHeader $srcToken -AccountID $baseAccount.id
                 }
                 catch {
@@ -979,7 +1019,7 @@ To get further information about the paramaters use "Get-Help Sync-Accounts -ful
                     Write-LogMessage -type Debug -MSG "$srcAccount = Get-AccountDetail -url $srcPVWAURL -logonHeader $srcToken -AccountID $baseAccount.id"
                     continue
                 }
-                If ($($srcAccount.safename) -in $objectSafesToRemove) {
+                if ($($srcAccount.safename) -in $objectSafesToRemove) {
                     Write-LogMessage -type Info -MSG "Safe $($srcAccount.safename) is in the excluded safes list. Account with username of `"$($srcAccount.userName)`" with the address of `"$($srcAccount.address)`" will be skipped"
                     $AccountStatus.success = $true
                     continue
@@ -987,13 +1027,18 @@ To get further information about the paramaters use "Get-Help Sync-Accounts -ful
                 Write-LogMessage -type Debug -MSG 'Found source account'
                 Write-LogMessage -type Verbose -MSG "Source account: $($srcAccount |ConvertTo-Json -Compress)"
                 Write-LogMessage -type Debug -MSG "Searching for destination account with username `"$($srcAccount.userName)`" and address `"$($srcAccount.address)`" in safe `"$($srcAccount.safeName)`""
+                if ([string]::IsNullOrEmpty($($srcAccount.safeName)) -or [string]::IsNullOrEmpty($($srcAccount.userName)) -or [string]::IsNullOrEmpty($($srcAccount.address))) {
+                    Write-LogMessage -type Error -MSG "Source account with username `"$($srcAccount.userName)`" and address `"$($srcAccount.address)`" in safe `"$($srcAccount.safeName)`" is missing required fields. Skipping account."
+                    $AccountStatus.success = $false
+                    continue
+                }
                 [array]$dstAccountArray = Get-Accounts -url $dstPVWAURL -logonHeader $dstToken -safename $($srcAccount.safeName) -keywords "$($srcAccount.userName) $($srcAccount.address)" -startswith $true
                 if ((0 -ne $($dstAccountArray.count))) {
                     Write-LogMessage -type Verbose -MSG "Results array from destination: $($dstAccountArray | ConvertTo-Json -Compress)"
                     Write-LogMessage -type Debug -MSG "Found $($dstAccountArray.count) possible destination accounts"
                     foreach ($account in $dstAccountArray) {
                         Write-LogMessage -type Debug -MSG "Comparing found account `"$($account.name)`" to source account of `"$($srcAccount.name)`""
-                        IF (($($account.name) -eq $($srcAccount.name)) -and ($($account.userName) -eq $($srcAccount.userName)) -and ($($account.address) -eq $($srcAccount.address)) -and ($($account.safeName) -eq $($srcAccount.safeName))  ) {
+                        if (($($account.name) -eq $($srcAccount.name)) -and ($($account.userName) -eq $($srcAccount.userName)) -and ($($account.address) -eq $($srcAccount.address)) -and ($($account.safeName) -eq $($srcAccount.safeName))  ) {
                             Write-LogMessage -type Debug -MSG "Found destination account with username `"$($account.userName)`" and address `"$($account.address)`" in safe `"$($account.safeName)`""
                             Write-LogMessage -type Verbose -MSG "Destination account: $($account | ConvertTo-Json -Compress)"
                             $dstAccountFound = $true
@@ -1006,21 +1051,139 @@ To get further information about the paramaters use "Get-Help Sync-Accounts -ful
                 }
 
                 if ($dstAccountFound) {
+                    # Synchronize account properties to make destination account look like source account
+                    if ($SyncAccountProperties) {
+                        Write-LogMessage -type Info -MSG 'SyncAccountProperties enabled - Synchronizing destination account properties to match source account'
+                        try {
+                            # Get full destination account details first
+                            $dstAccountFull = Get-AccountDetail -url $dstPVWAURL -logonHeader $dstToken -AccountID $dstAccount.id
+
+                            # Create operations array for account updates
+                            $operations = @()
+
+                            # Compare and update platformId if different
+                            if ($dstAccountFull.platformId -ne $srcAccount.platformId) {
+                                $operations += @{
+                                    op    = 'replace'
+                                    path  = '/platformId'
+                                    value = $srcAccount.platformId
+                                }
+                                Write-LogMessage -type Debug -MSG "Platform ID differs - Source: '$($srcAccount.platformId)', Destination: '$($dstAccountFull.platformId)'"
+                            }
+
+                            # Compare and update automaticManagementEnabled if different
+                            if ($srcAccount.PSObject.Properties.Name -contains 'automaticManagementEnabled' -and
+                                $dstAccountFull.PSObject.Properties.Name -contains 'automaticManagementEnabled' -and
+                                $dstAccountFull.automaticManagementEnabled -ne $srcAccount.automaticManagementEnabled) {
+                                $operations += @{
+                                    op    = 'replace'
+                                    path  = '/automaticManagementEnabled'
+                                    value = $srcAccount.automaticManagementEnabled
+                                }
+                                Write-LogMessage -type Debug -MSG "automaticManagementEnabled differs - Source: '$($srcAccount.automaticManagementEnabled)', Destination: '$($dstAccountFull.automaticManagementEnabled)'"
+                            }
+
+                            # Compare and update manualManagementReason if different
+                            if ($srcAccount.PSObject.Properties.Name -contains 'manualManagementReason' -and
+                                $dstAccountFull.PSObject.Properties.Name -contains 'manualManagementReason' -and
+                                $dstAccountFull.manualManagementReason -ne $srcAccount.manualManagementReason) {
+                                $operations += @{
+                                    op    = 'replace'
+                                    path  = '/manualManagementReason'
+                                    value = $srcAccount.manualManagementReason
+                                }
+                                Write-LogMessage -type Debug -MSG "manualManagementReason differs - Source: '$($srcAccount.manualManagementReason)', Destination: '$($dstAccountFull.manualManagementReason)'"
+                            }
+
+                            # Sync secretManagement properties if they exist
+                            if ($srcAccount.PSObject.Properties.Name -contains 'secretManagement' -and
+                                $dstAccountFull.PSObject.Properties.Name -contains 'secretManagement') {
+
+                                # Compare automaticManagementEnabled within secretManagement
+                                if ($srcAccount.secretManagement.PSObject.Properties.Name -contains 'automaticManagementEnabled' -and
+                                    $dstAccountFull.secretManagement.PSObject.Properties.Name -contains 'automaticManagementEnabled' -and
+                                    $dstAccountFull.secretManagement.automaticManagementEnabled -ne $srcAccount.secretManagement.automaticManagementEnabled) {
+                                    $operations += @{
+                                        op    = 'replace'
+                                        path  = '/secretManagement/automaticManagementEnabled'
+                                        value = $srcAccount.secretManagement.automaticManagementEnabled
+                                    }
+                                    Write-LogMessage -type Debug -MSG "SecretManagement.automaticManagementEnabled differs - Source: '$($srcAccount.secretManagement.automaticManagementEnabled)', Destination: '$($dstAccountFull.secretManagement.automaticManagementEnabled)'"
+                                }
+
+                                # Compare manualManagementReason within secretManagement
+                                if ($srcAccount.secretManagement.PSObject.Properties.Name -contains 'manualManagementReason' -and
+                                    $dstAccountFull.secretManagement.PSObject.Properties.Name -contains 'manualManagementReason' -and
+                                    $dstAccountFull.secretManagement.manualManagementReason -ne $srcAccount.secretManagement.manualManagementReason) {
+                                    $operations += @{
+                                        op    = 'replace'
+                                        path  = '/secretManagement/manualManagementReason'
+                                        value = $srcAccount.secretManagement.manualManagementReason
+                                    }
+                                    Write-LogMessage -type Debug -MSG "SecretManagement.manualManagementReason differs - Source: '$($srcAccount.secretManagement.manualManagementReason)', Destination: '$($dstAccountFull.secretManagement.manualManagementReason)'"
+                                }
+                            }
+
+                            # Sync platformAccountProperties if they exist and differ
+                            if ($srcAccount.PSObject.Properties.Name -contains 'platformAccountProperties' -and
+                                $srcAccount.platformAccountProperties -and
+                                $srcAccount.platformAccountProperties.Count -gt 0) {
+
+                                # Compare platform account properties
+                                $srcPropsJson = $srcAccount.platformAccountProperties | ConvertTo-Json -Depth 5 -Compress
+                                $dstPropsJson = $dstAccountFull.platformAccountProperties | ConvertTo-Json -Depth 5 -Compress
+
+                                if ($srcPropsJson -ne $dstPropsJson) {
+                                    $operations += @{
+                                        op    = 'replace'
+                                        path  = '/platformAccountProperties'
+                                        value = $srcAccount.platformAccountProperties
+                                    }
+                                    Write-LogMessage -type Debug -MSG 'Platform account properties differ - updating from source'
+                                }
+                            }
+
+                            # Update the account if changes are needed
+                            if ($operations.Count -gt 0) {
+                                Write-LogMessage -type Info -MSG "Updating $($operations.Count) destination account properties to match source account"
+                                $updateBody = $operations | ConvertTo-Json -Depth 10 -Compress
+                                Write-LogMessage -type Debug -MSG "Update operations: $updateBody"
+
+                                $URL_UpdateAccount = "$dstPVWAURL/api/Accounts/$($dstAccount.id)"
+                                Invoke-Rest -Command PATCH -Uri $URL_UpdateAccount -Header $dstToken -Body $updateBody | Out-Null
+                                Write-LogMessage -type Info -MSG 'Destination account properties successfully updated to match source account'
+
+                                # Refresh destination account details
+                                $dstAccount = Get-AccountDetail -url $dstPVWAURL -logonHeader $dstToken -AccountID $dstAccount.id
+                            }
+                            else {
+                                Write-LogMessage -type Info -MSG 'Destination account properties already match source account'
+                            }
+                        }
+                        catch {
+                            Write-LogMessage -type Warning -MSG "Failed to update destination account properties: $($_.Exception.Message)"
+                            Write-LogMessage -type Debug -MSG "Account update error: $($_ | ConvertTo-Json -Compress)"
+                        }
+                    }
+                    else {
+                        Write-LogMessage -type Debug -MSG 'SyncAccountProperties disabled - skipping account properties synchronization'
+                    }
+
                     if (!$SkipCheckSecret) {
                         Write-LogMessage -type debug -MSG 'SkipCheckSecret set to false. Starting check on source and destination secrets'
-                        Try {
+                        try {
                             Write-LogMessage -type Debug -MSG 'Getting source Secret'
                             [SecureString]$srcSecret = Get-Secret -url $srcPVWAURL -logonHeader $srcToken -id $srcAccount.id -ErrorAction SilentlyContinue
                             Write-LogMessage -type Debug -MSG "Source secret found: $(!$([string]::IsNullOrEmpty($srcSecret)))"
                             if ($null -eq $srcSecret) {
                                 Write-LogMessage -type Info -MSG 'No secret found on source account. No change will be made to destination secret.'
                                 $AccountStatus.success = $true
-                                Continue
+                                continue
                             }
                             Write-LogMessage -type Debug -MSG 'Getting destination Secret'
                             [SecureString]$dstSecret = Get-Secret -url $dstPVWAURL -logonHeader $dstToken -id $dstAccount.id -ErrorAction SilentlyContinue
                             Write-LogMessage -type Debug -MSG "Destination secret found: $(!$([string]::IsNullOrEmpty($srcSecret)))"
-                            If ((![string]::IsNullOrEmpty($srcSecret)) -and (![string]::IsNullOrEmpty($dstSecret)) ) {
+                            if ((![string]::IsNullOrEmpty($srcSecret)) -and (![string]::IsNullOrEmpty($dstSecret)) ) {
                                 Write-LogMessage -type Debug -MSG 'Comparing secrets'
                                 $secretMatch = Compare-SecureString -pwd1 $srcSecret -pwd2 $dstSecret
                             }
@@ -1031,7 +1194,7 @@ To get further information about the paramaters use "Get-Help Sync-Accounts -ful
                                 $AccountStatus.success = $true
                             }
                             elseif (!$secretMatch) {
-                                Write-LogMessage -type Debug -MSG "The secret for ource and destination account with username `"$($dstAccount.userName)`" and address `"$($dstAccount.address)`" in safe `"$($dstAccount.safeName)`" secret do not match. Setting destination secret to match source secret."
+                                Write-LogMessage -type Debug -MSG "The secret for source and destination account with username `"$($dstAccount.userName)`" and address `"$($dstAccount.address)`" in safe `"$($dstAccount.safeName)`" secret do not match. Setting destination secret to match source secret."
                                 Set-Secret -url $dstPVWAURL -logonHeader $dstToken -id $dstAccount.id -Secret $srcSecret
                                 Write-LogMessage -type Info -MSG "Destination account secret with username `"$($dstAccount.userName)`" and address `"$($srcAccount.address)`" in safe `"$($srcAccount.safeName)`" set to match source account."
                                 $AccountStatus.success = $true
@@ -1045,17 +1208,17 @@ To get further information about the paramaters use "Get-Help Sync-Accounts -ful
                             }
                         }
                         catch [System.Management.Automation.RuntimeException] {
-                            If ('Account Locked' -eq $_) {
+                            if ('Account Locked' -eq $_) {
                                 Write-LogMessage -type Warning -MSG "Source Account `"$($srcAccount.userName)`" and address `"$($srcAccount.address)`" in safe `"$($srcAccount.safeName)`" Locked to another user, unable to update."
                                 Write-LogMessage -type Debug -MSG "$($PSitem.Exception)"
                             }
                             else {
-                                Write-LogMessage -type Error -MSG "Error encountered while working with acount with username `"$($srcAccount.userName)`" and address `"$($srcAccount.address)`" in safe `" $($srcAccount.safeName)`": $($_.Exception.Message)" -ErrorAction SilentlyContinue
-                                Write-LogMessage -type LogOnly -MSG "Error encountered while working with acount with username `"$($srcAccount.userName)`" and address `"$($srcAccount.address)`" in safe `": $($_|ConvertTo-Json -Compress)" -ErrorAction SilentlyContinue
+                                Write-LogMessage -type Error -MSG "Error encountered while working with account with username `"$($srcAccount.userName)`" and address `"$($srcAccount.address)`" in safe `" $($srcAccount.safeName)`": $($_.Exception.Message)" -ErrorAction SilentlyContinue
+                                Write-LogMessage -type LogOnly -MSG "Error encountered while working with account with username `"$($srcAccount.userName)`" and address `"$($srcAccount.address)`" in safe `": $($_|ConvertTo-Json -Compress)" -ErrorAction SilentlyContinue
                             }
                         }
                     }
-                    Else {
+                    else {
                         Write-LogMessage -type Debug -MSG 'SkipCheckSecret set to true. No checks being done on source and destination secrets'
                         $AccountStatus.success = $true
                     }
@@ -1070,14 +1233,14 @@ To get further information about the paramaters use "Get-Help Sync-Accounts -ful
                 }
                 else {
                     try {
-                        If ($VerifyPlatform) {
+                        if ($VerifyPlatform) {
                             Write-LogMessage -type info -MSG "Verifying platform with ID of `"$($srcAccount.platformId)`" exists in destination enviorment for account `"$($srcAccount.Name)`" in safe `"$($srcAccount.safeName)`""
                             Write-LogMessage -type Verbose -MSG "Source Accounts: $($srcAccount |ConvertTo-Json -Compress)"
 
                             $srcAccount.platformId = $($platforms.Platforms.general | Where-Object { $_.id -like $srcAccount.platformId }).id
                             if ([string]::IsNullOrEmpty($srcAccount.platformId )) {
                                 Write-LogMessage -type Error -MSG "Unable to locate platform in destination for account with the username `"$($dstAccount.userName)`" and address `"$($dstAccount.address)`" in safe `" $($srcAccount.safeName)`" unable to create account"
-                                Continue
+                                continue
                             }
                         }
 
@@ -1090,7 +1253,7 @@ To get further information about the paramaters use "Get-Help Sync-Accounts -ful
                         }
                         Write-LogMessage -type info -MSG "Destination safe `"$($srcAccount.safeName)`" found"
                         [SecureString]$srcSecret = Get-Secret -url $srcPVWAURL -logonHeader $srcToken -id $srcAccount.id -ErrorAction SilentlyContinue
-                        IF (![string]::IsNullOrEmpty($srcSecret)) {
+                        if (![string]::IsNullOrEmpty($srcSecret)) {
                             Write-LogMessage -type debug -MSG "Source account with username `"$($dstAccount.userName)`" and address `"$($srcAccount.address)`" in safe `"$($srcAccount.safeName)`" has a secret. Sending creation request to destination enviorment"
                             $dstAccount = New-Account -url $dstPVWAURL -logonHeader $dstToken -account $srcAccount -secret $srcSecret
                             Write-LogMessage -type Debug -MSG "Account with username `"$($dstAccount.userName)`" and address `"$($dstAccount.address)`" in safe `"$($dstAccount.safeName)`" succefully created in destination enviorment"
@@ -1106,15 +1269,15 @@ To get further information about the paramaters use "Get-Help Sync-Accounts -ful
                         $AccountStatus.success = $true
                     }
                     catch [System.Management.Automation.RuntimeException] {
-                        If ('Account Locked' -eq $_.Exception.Message) {
+                        if ('Account Locked' -eq $_.Exception.Message) {
                             Write-LogMessage -type Warning -MSG "Source Account with username `"$($srcAccount.userName)`" and address `"$($srcAccount.address)`" in safe `"$($srcAccount.safeName)`" Locked, unable to update"
                             Write-LogMessage -type Debug -MSG $PSitem
                         }
-                        elseIf ($_.Exception.Message -match 'Safe .* was not found') {
+                        elseif ($_.Exception.Message -match 'Safe .* was not found') {
                             Write-LogMessage -type Warning -MSG "Source safe `"$($srcAccount.safeName)`" not found"
                             Write-LogMessage -type Debug -MSG $PSitem
                         }
-                        elseIf ($_.Exception.Message -match 'Platform .* was not found') {
+                        elseif ($_.Exception.Message -match 'Platform .* was not found') {
                             Write-LogMessage -type Warning -MSG "Platform `"$($srcAccount.platformId)`" not found. Unable to create `"$($srcAccount.Name)`" in safe `"$($srcAccount.safeName)`""
                             Write-LogMessage -type Debug -MSG $PSitem
                         }
@@ -1130,57 +1293,84 @@ To get further information about the paramaters use "Get-Help Sync-Accounts -ful
                         Write-LogMessage -type Debug -MSG "Caught Exception:`n$($PSitem.Exception)"
                     }
                 }
-            } Catch {
+            }
+            catch {
                 Write-LogMessage -type Error -MSG "Error in account processing for account `"$($baseAccount.name)`" in safe `"$($baseAccount.safeName)`""
                 Write-LogMessage -type Error -MSG $PSItem
                 Write-LogMessage -type Debug -MSG "$baseAccount = $PSItem"
                 continue
             }
-            Finally {
+            finally {
                 $accountStatus
                 $process.Completed = $true
             }
         }
 
         Write-LogMessage -type Info -MSG "Submission of $($AccountJob.ChildJobs.Count) jobs completed at $(Get-Date -Format 'HH:mm:ss'). Maxiumn running PowerShell jobs set to $maxJobCount."
+        Write-LogMessage -type Info -MSG "Press Ctrl+C to cancel processing and output list of skipped items"
         $PSStyle.Progress.View = 'Classic'
+        $cancelled = $false
         while ($AccountJob.State -eq 'Running') {
-            $accountProgressSync.Keys | ForEach-Object {
-                if (![string]::IsNullOrEmpty($accountProgressSync.$_.keys)) {
-                    if (!$SuppressProgress) {
-                        $completed = $($AccountJob.ChildJobs | Where-Object { $_.State -eq 'Completed' }).count
-                        $total = $AccountJob.ChildJobs.count
-                        $Precent = ($completed / $total) * 100
-                        $process = @{}
-                        $process.Id = 0
-                        $process.Activity = 'Processing Accounts'
-                        $process.Status = "$completed out of $total jobs completed"
-                        $process.PercentComplete = $Precent
-                        Write-Progress -Id 0 @process
-                        if ($ProgressDetails.IsPresent) {
-                            $param = $accountProgressSync.$_
-                            $param.ParentId = 0
-                            Write-Progress @param
+            try {
+                $accountProgressSync.Keys | ForEach-Object {
+                    if (![string]::IsNullOrEmpty($accountProgressSync.$_.keys)) {
+                        if (!$SuppressProgress) {
+                            $completed = $($AccountJob.ChildJobs | Where-Object { $_.State -eq 'Completed' }).count
+                            $total = $AccountJob.ChildJobs.count
+                            $Precent = ($completed / $total) * 100
+                            $process = @{}
+                            $process.Id = 0
+                            $process.Activity = 'Processing Accounts'
+                            $process.Status = "$completed out of $total jobs completed (Press Ctrl+C to cancel)"
+                            $process.PercentComplete = $Precent
+                            Write-Progress -Id 0 @process
+                            if ($ProgressDetails.IsPresent) {
+                                $param = $accountProgressSync.$_
+                                $param.ParentId = 0
+                                Write-Progress @param
+                            }
                         }
                     }
                 }
+                # Wait to refresh to not overload gui
+                Start-Sleep -Seconds .5
             }
-            # Wait to refresh to not overload gui
-            Start-Sleep -Seconds .5
+            catch [System.OperationCanceledException] {
+                Write-LogMessage -type Warning -MSG "Cancellation requested by user. Stopping remaining jobs..."
+                $cancelled = $true
+                Stop-Job $AccountJob -PassThru | Remove-Job
+                break
+            }
         }
     }
-    Finally {
+    finally {
         Write-Progress -Id 0 -Completed $true
         $($AccountReport = Receive-Job $accountjob) 6> $null 5> $null 4> $null 3> $null 2> $null 1> $null
         $AccountSuccess = $AccountReport | Where-Object success -EQ $true
         $AccountFailed = $AccountReport | Where-Object success -EQ $false -ErrorAction SilentlyContinue
+
+        # Handle cancelled jobs - create list of skipped accounts
+        if ($cancelled) {
+            $completedAccountIds = $AccountReport | ForEach-Object { $_.id }
+            $skippedAccounts = $accountobjects | Where-Object { $_.ProcessID -notin $completedAccountIds }
+            if ($skippedAccounts.Count -gt 0) {
+                Write-LogMessage -type Warning -MSG "Processing was cancelled. $($skippedAccounts.Count) accounts were skipped."
+                $skippedAccounts | Add-Member -MemberType NoteProperty -Name SkipReason -Value "Processing cancelled by user" -Force
+                $skippedAccounts | Export-Csv .\SkippedAccounts.csv -NoTypeInformation
+                Write-LogMessage -type Info -MSG "List of skipped accounts exported to `".\SkippedAccounts.csv`""
+            }
+        }
+
         Write-LogMessage -type Info "Accounts succesfully updated: $($accountSuccess.success.count)"
         Write-LogMessage -type Info "Accounts failed to updated: $($AccountFailed.success.count)"
-        If (![string]::IsNullOrEmpty($AccountFailed)) {
+        if ($cancelled) {
+            Write-LogMessage -type Warning "Accounts skipped due to cancellation: $($skippedAccounts.Count)"
+        }
+        if (![string]::IsNullOrEmpty($AccountFailed)) {
             [array]$AccountFailed.accountData | Add-Member -MemberType NoteProperty -Name FailReason -Value $null -Force
             $i = 0
             foreach ($id in $AccountFailed) {
-                $AccountFailed[$i].accountData.FailReason = $AccountFailed[$i].Error 
+                $AccountFailed[$i].accountData.FailReason = $AccountFailed[$i].Error
                 $i++
             }
             $AccountFailed.accountData | Export-Csv -Force .\FailedAccounts.csv
@@ -1190,7 +1380,7 @@ To get further information about the paramaters use "Get-Help Sync-Accounts -ful
     }
 }
 
-Function Set-DomainList {
+function Set-DomainList {
     (
         [Parameter(Mandatory)]
         $domainJSon
@@ -1199,7 +1389,7 @@ Function Set-DomainList {
 }
 
 
-Function New-DomainList 
+function New-DomainList
 (
     [Parameter(Mandatory)]
     $DomainName,
@@ -1209,18 +1399,18 @@ Function New-DomainList
     [hashtable]$script:DomainList = @{}
     $script:DomainList.add($DomainBaseContext, $DomainName)
 }
-Function New-DomainEntry 
+function New-DomainEntry
 (
     [Parameter(Mandatory)]
     $DomainName,
     [Parameter(Mandatory)]
     $DomainBaseContext
 ) {
-    IF ([string]::IsNullOrEmpty($script:domainlist)) {
+    if ([string]::IsNullOrEmpty($script:domainlist)) {
         Write-LogMessage -type Warning -MSG 'No domain list exists, creating new domain list'
         New-DomainList -DomainName $DomainName -DomainBaseContext $DomainBaseContext
     }
-    elseIF ([string]::IsNullOrEmpty($script:domainlist[$DomainBaseContext])) {
+    elseif ([string]::IsNullOrEmpty($script:domainlist[$DomainBaseContext])) {
         $script:DomainList.add($DomainBaseContext, $DomainName)
     }
     else {
@@ -1230,14 +1420,14 @@ Function New-DomainEntry
     }
 }
 
-Function Remove-DomainEntry 
+function Remove-DomainEntry
 (
     [Parameter(Mandatory)]
     $DomainName,
     [Parameter(Mandatory)]
     $DomainBaseContext
 ) {
-    IF ([string]::IsNullOrEmpty($script:domainlist[$DomainBaseContext])) {
+    if ([string]::IsNullOrEmpty($script:domainlist[$DomainBaseContext])) {
         Write-LogMessage -type Warning -MSG 'Existing Domain Base Context not found. No Changes Made'
     }
     else {
@@ -1247,8 +1437,8 @@ Function Remove-DomainEntry
     }
 }
 
-Function Import-DomainList () {
-    Try {
+function Import-DomainList () {
+    try {
         $Results = Get-Directories -url $script:srcPVWAURL -logonHeader $script:srcToken
         [hashtable]$script:DomainList = @{}
         $results | ForEach-Object { New-DomainEntry -DomainName $PSitem.DomainName -DomainBaseContext $PSitem.DomainBaseContext }

@@ -351,54 +351,67 @@ Function Invoke-Rest {
         Throw "This script requires PowerShell version 3 or above"
     }
     $restResponse = ""
-    try {
-        if ([string]::IsNullOrEmpty($Body)) {
-            Write-LogMessage -Type Verbose -Msg "Invoke-RestMethod -Uri $URI -Method $Command -Header $($Header |ConvertTo-Json -Compress -Depth 9) -ContentType ""application/json"" -TimeoutSec 2700"
-            $restResponse = Invoke-RestMethod -Uri $URI -Method $Command -Header $Header -ContentType "application/json" -TimeoutSec 2700 -ErrorAction $ErrAction
-        } else {
-            Write-LogMessage -Type Verbose -Msg "Invoke-RestMethod -Uri $URI -Method $Command -Body $Body -Header $($Header |ConvertTo-Json -Compress -Depth 9) -ContentType ""application/json"" -TimeoutSec 2700"
-            $restResponse = Invoke-RestMethod -Uri $URI -Method $Command -Body $Body -Header $Header -ContentType "application/json" -TimeoutSec 2700 -ErrorAction $ErrAction
-        }
-    } catch [System.Net.WebException] {
-        if ($ErrAction -match ("\bContinue\b|\bInquire\b|\bStop\b|\bSuspend\b")) {
-            IF (![string]::IsNullOrEmpty($(($PSItem.ErrorDetails.Message | ConvertFrom-Json).ErrorCode))) {
-                If (($($PSItem.ErrorDetails.Message | ConvertFrom-Json).ErrorCode -eq "ITATS127E")) {
+    $maxRetries = 15
+    $retryCount = 0
+    $success = $false
 
-                    Write-LogMessage -Type Error -Msg "Was able to connect to the PVWA successfully, but the account was locked"
-                    Write-LogMessage -Type Error -Msg "URI:  $URI"
-                    Write-LogMessage -Type Verbose -Msg "Exiting Invoke-Rest"
-                    Throw [System.Management.Automation.RuntimeException] "Account Locked"
-                } ElseIf (!($($PSItem.ErrorDetails.Message | ConvertFrom-Json).ErrorCode -in $global:SkipErrorCode)) {
-                    Write-LogMessage -Type Error -Msg "Was able to connect to the PVWA successfully, but the command resulted in a error"
-                    Write-LogMessage -Type Error -Msg "URI:  $URI"
-                    Write-LogMessage -Type Error -Msg "Command:  $Command"
-                    Write-LogMessage -Type Error -Msg "Body:  $Body"
-                    Write-LogMessage -Type Error -Msg "Returned ErrorCode: $(($PSItem.ErrorDetails.Message|ConvertFrom-Json).ErrorCode)"
-                    Write-LogMessage -Type Error -Msg "Returned ErrorMessage: $(($PSItem.ErrorDetails.Message|ConvertFrom-Json).ErrorMessage)"
+    while (-not $success -and $retryCount -lt $maxRetries) {
+        try {
+            if ([string]::IsNullOrEmpty($Body)) {
+                Write-LogMessage -Type Verbose -Msg "Invoke-RestMethod -Uri $URI -Method $Command -Header $($Header |ConvertTo-Json -Compress -Depth 9) -ContentType ""application/json"" -TimeoutSec 2700"
+                $restResponse = Invoke-RestMethod -Uri $URI -Method $Command -Header $Header -ContentType "application/json" -TimeoutSec 2700 -ErrorAction $ErrAction
+            } else {
+                Write-LogMessage -Type Verbose -Msg "Invoke-RestMethod -Uri $URI -Method $Command -Body $Body -Header $($Header |ConvertTo-Json -Compress -Depth 9) -ContentType ""application/json"" -TimeoutSec 2700"
+                $restResponse = Invoke-RestMethod -Uri $URI -Method $Command -Body $Body -Header $Header -ContentType "application/json" -TimeoutSec 2700 -ErrorAction $ErrAction
+            }
+            $success = $true
+        } catch [System.Net.WebException] {
+            # Check if this is a 429 (Too Many Requests) error
+            if ($PSItem.Exception.Response.StatusCode.value__ -eq 429) {
+                $retryCount++
+                if ($retryCount -lt $maxRetries) {
+                    Write-LogMessage -Type Warning -Msg "Received 429 (Too Many Requests) error. Attempt $retryCount of $maxRetries. Sleeping for 30 seconds before retry..."
+                    Write-LogMessage -Type Warning -Msg "URI: $URI"
+                    Start-Sleep -Seconds 30
+                    continue
+                } else {
+                    Write-LogMessage -Type Error -Msg "Received 429 (Too Many Requests) error. Maximum retry attempts ($maxRetries) exceeded."
+                    Write-LogMessage -Type Error -Msg "URI: $URI"
+                    Throw $(New-Object System.Exception ("Invoke-Rest: Too many requests - maximum retries exceeded for '$URI'", $PSItem.Exception))
+                }
+            }
+            if ($ErrAction -match ("\bContinue\b|\bInquire\b|\bStop\b|\bSuspend\b")) {
+                IF (![string]::IsNullOrEmpty($(($PSItem.ErrorDetails.Message | ConvertFrom-Json).ErrorCode))) {
+                    If (($($PSItem.ErrorDetails.Message | ConvertFrom-Json).ErrorCode -eq "ITATS127E")) {
+                        Write-LogMessage -Type Error -Msg "Was able to connect to the PVWA successfully, but the account was locked"
+                        Write-LogMessage -Type Error -Msg "URI:  $URI"
+                        Write-LogMessage -Type Verbose -Msg "Exiting Invoke-Rest"
+                        Throw [System.Management.Automation.RuntimeException] "Account Locked"
+                    } ElseIf (!($($PSItem.ErrorDetails.Message | ConvertFrom-Json).ErrorCode -in $global:SkipErrorCode)) {
+                        Write-LogMessage -Type Error -Msg "Was able to connect to the PVWA successfully, but the command resulted in a error"
+                        Write-LogMessage -Type Error -Msg "URI:  $URI"
+                        Write-LogMessage -Type Error -Msg "Command:  $Command"
+                        Write-LogMessage -Type Error -Msg "Body:  $Body"
+                        Write-LogMessage -Type Error -Msg "Returned ErrorCode: $(($PSItem.ErrorDetails.Message|ConvertFrom-Json).ErrorCode)"
+                        Write-LogMessage -Type Error -Msg "Returned ErrorMessage: $(($PSItem.ErrorDetails.Message|ConvertFrom-Json).ErrorMessage)"
+                        Write-LogMessage -Type Verbose $PSItem
+                    }
+                } Else {
+                    Write-LogMessage -Type Error -Msg "Error Message: $PSItem"
+                    Write-LogMessage -Type Error -Msg "Exception Message: $($PSItem.Exception.Message)"
+                    Write-LogMessage -Type Error -Msg "Status Code: $($PSItem.Exception.Response.StatusCode.value__)"
+                    Write-LogMessage -Type Error -Msg "Status Description: $($PSItem.Exception.Response.StatusDescription)"
                     Write-LogMessage -Type Verbose $PSItem
                 }
-            } Else {
-                Write-LogMessage -Type Error -Msg "Error Message: $PSItem"
-                Write-LogMessage -Type Error -Msg "Exception Message: $($PSItem.Exception.Message)"
-                Write-LogMessage -Type Error -Msg "Status Code: $($PSItem.Exception.Response.StatusCode.value__)"
-                Write-LogMessage -Type Error -Msg "Status Description: $($PSItem.Exception.Response.StatusDescription)"
-                Write-LogMessage -Type Verbose $PSItem
             }
-        }
-        $restResponse = $null
-    } catch {
-        Write-LogMessage -Type Error -Msg "`tError Message: $PSItem"
-        Write-LogMessage -Type Verbose $PSItem
-        Write-LogMessage -Type Verbose -Msg "Exiting Invoke-Rest"
-        Throw $(New-Object System.Exception ("Invoke-Rest: Error in running $Command on '$URI'", $PSItem.Exception))
-        <#  IF (![string]::IsNullOrEmpty($(($PSItem | ConvertFrom-Json -AsHashtable -ErrorAction SilentlyContinue).Details.ErrorMessage))) {
-            Throw $($(($PSItem | ConvertFrom-Json -AsHashtable -ErrorAction SilentlyContinue).Details.ErrorMessage))
-        } elseif (![string]::IsNullOrEmpty($(($PSItem | ConvertFrom-Json -AsHashtable).ErrorMessage))) {
-            Throw $($(($PSItem | ConvertFrom-Json -AsHashtable -ErrorAction SilentlyContinue).ErrorMessage))
-        } else {
-            Write-LogMessage -Type Error -Msg "Error Message: $PSItem"
+            $restResponse = $null
+            $success = $true  # Exit the retry loop for non-429 errors
+        } catch {
+            Write-LogMessage -Type Error -Msg "`tError Message: $PSItem"
+            Write-LogMessage -Type Verbose $PSItem
+            Write-LogMessage -Type Verbose -Msg "Exiting Invoke-Rest"
             Throw $(New-Object System.Exception ("Invoke-Rest: Error in running $Command on '$URI'", $PSItem.Exception))
-        } #>
+        }
     }
     If ($URI -match "Password/Retrieve") {
         Write-LogMessage -Type Verbose -Msg "Invoke-REST Response: ***********"
