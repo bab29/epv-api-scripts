@@ -184,7 +184,25 @@ function Test-PCloudAPI {
     Write-Host "This test validates API calls using the authentication headers."
     Write-Host ""
     
-    $pvwaUrl = $Context.PCloudURL -replace '\.cyberark\.cloud.*', '.privilegecloud.cyberark.cloud/PasswordVault'
+    # Normalize PVWA URL - handle various input formats
+    $pvwaUrl = $Context.PCloudURL
+    
+    # Remove trailing slashes
+    $pvwaUrl = $pvwaUrl.TrimEnd('/')
+    
+    # If URL already has /PasswordVault, keep it
+    if (-not $pvwaUrl.EndsWith('/PasswordVault')) {
+        # Check if it already has privilegecloud in the domain
+        if ($pvwaUrl -match 'privilegecloud\.cyberark\.cloud') {
+            $pvwaUrl = "$pvwaUrl/PasswordVault"
+        } else {
+            # Convert base URL to privilegecloud URL
+            $pvwaUrl = $pvwaUrl -replace '\.cyberark\.cloud.*', '.privilegecloud.cyberark.cloud/PasswordVault'
+        }
+    }
+    
+    Write-Host "  Using PVWA URL: $pvwaUrl" -ForegroundColor Gray
+    Write-Host ""
     
     try {
         # Test Accounts API
