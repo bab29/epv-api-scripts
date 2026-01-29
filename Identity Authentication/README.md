@@ -2,7 +2,7 @@
 
 ## Main capabilities
 
-- `Get-IdentityHeader`: creates a hash of an authentication token with `X-IDAP-NATIVE-CLIENT = True`. The token can be output to the right format for psPAS.
+- `Get-IdentityHeader`: creates a hash of an authentication token with `X-IDAP-NATIVE-CLIENT = True` for use with CyberArk REST APIs.
 
 - The scripts follow the recommendations for the authentication to Identity Security Platform - Shared Services (ISPSS) that can be found here: *links are outdated*
 
@@ -53,22 +53,13 @@ $OAuth = Get-Credential
 $header = Get-IdentityHeader  -PCloudURL "something.cyberark.cloud" -OAuthCreds $OAuth
 ```
 
-Format output in a psPAS-compatible format. Only run $header once based on type of connection desired
-```powershell
-Import-Module IdentityAuth.psm1
-$header = Get-IdentityHeader  -PCloudURL "something.cyberark.cloud" -psPASFormat -PCloudSubdomain "subdomain" -IdentityUserName "UserToAuthenticate@cyberark.cloud.ID"
-$header = Get-IdentityHeader  -PCloudURL "something.cyberark.cloud" -psPASFormat -PCloudSubdomain "subdomain" -UPCreds $UPCreds -PCloudSubdomain "subdomain"
-$header = Get-IdentityHeader  -PCloudURL "something.cyberark.cloud" -psPASFormat -PCloudSubdomain "subdomain" -OAuthCreds $OAuth
-use-PASSession $header
-```
-
 SYNTAX
 ````powershell
-Get-IdentityHeader [-PCloudURL <String>] [-IdentityTenantURL <String>] -IdentityUserName <String> [-psPASFormat] [-PCloudSubdomain <String>] [<CommonParameters>]
+Get-IdentityHeader [-PCloudURL <String>] [-IdentityTenantURL <String>] -IdentityUserName <String> [<CommonParameters>]
 
-Get-IdentityHeader [-PCloudURL <String>] [-IdentityTenantURL <String>] -UPCreds <PSCredential> [-psPASFormat] [-PCloudSubdomain <String>] [<CommonParameters>]
+Get-IdentityHeader [-PCloudURL <String>] [-IdentityTenantURL <String>] -UPCreds <PSCredential> [<CommonParameters>]
 
-Get-IdentityHeader [-PCloudURL <String>] [-IdentityTenantURL <String>] -OAuthCreds <PSCredential> [-psPASFormat] [-PCloudSubdomain <String>] [<CommonParameters>]
+Get-IdentityHeader [-PCloudURL <String>] [-IdentityTenantURL <String>] -OAuthCreds <PSCredential> [<CommonParameters>]
 ````
 
 # Identity User Refresh
