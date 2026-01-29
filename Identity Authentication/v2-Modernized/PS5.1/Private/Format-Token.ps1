@@ -27,6 +27,18 @@ function Format-Token {
         [object]$Token
     )
 
-    # TODO: Implementation
-    throw "Not yet implemented"
+    # PS5.1: No ternary operator
+    if ($Token -is [string]) {
+        $tokenString = $Token
+    }
+    else {
+        $tokenString = $Token.ToString()
+    }
+
+    Write-Verbose "Formatting token for authorization header"
+
+    return @{
+        'Authorization'        = "Bearer $tokenString"
+        'X-IDAP-NATIVE-CLIENT' = 'true'
+    }
 }

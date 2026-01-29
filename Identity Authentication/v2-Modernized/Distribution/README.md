@@ -1,345 +1,348 @@
-# Identity Authentication Module v2 - Modernized
+# CyberArk Identity Authentication Module
 
-**Status:** 📋 Planning & Design Phase
-**Target Release:** TBD
-**PowerShell Compatibility:** 5.1+ (IdentityAuth.psm1) and 7.0+ (IdentityAuth7.psm1)
+**Status:** ✅ Production Ready  
+**Version:** 2.0.0  
+**PowerShell Compatibility:** 5.1+ (IdentityAuth.psm1) | 7.0+ (IdentityAuth7.psm1)
 
----
+[![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B%20%7C%207.0%2B-blue)](https://github.com/PowerShell/PowerShell)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](../../LICENSE)
 
-## Overview
-
-This is a **complete rewrite** of the Identity Authentication module with modern PowerShell standards, OOBAUTHPIN support (replacing deprecated SAML), and enhanced OAuth capabilities.
-
-### Key Improvements Over v1
-
-✅ **OOBAUTHPIN Flow** - Modern SAML replacement with PIN-based authentication
-✅ **Automatic OAuth Token Refresh** - No manual re-authentication needed
-✅ **Zero PSScriptAnalyzer Violations** - Strict code quality standards
-✅ **Dual PowerShell Versions** - PS5.1 baseline + PS7 with classes/enums/modern features
-✅ **No Write-Host** - Proper output streams (Write-Output, Write-Verbose, Write-Warning)
-✅ **Session State Management** - `$script:CurrentSession` with automatic expiry detection
-✅ **Comprehensive Logging** - Transcript support with sensitive data masking
-✅ **Standardized Return Value** - Returns hashtable with Authorization and X-IDAP-NATIVE-CLIENT headers
+PowerShell module for authenticating to CyberArk Identity Security Platform with support for OAuth, MFA, and OOBAUTHPIN (SAML+PIN) flows.
 
 ---
 
-## Module Structure
+## Features
 
-```
-v2-Modernized/
-├── README.md                           # This file
-├── Documentation/
-│   ├── IMPLEMENTATION-PLAN.md          # 9-step implementation roadmap (5-7 weeks)
-│   ├── ARCHITECTURE-DESIGN.md          # Architecture with Mermaid diagrams
-│   ├── PLANNING-SUMMARY.md             # Planning phase summary
-│   └── DESIGN-CHANGES.md               # Design decisions and feedback
-│
-├── PS5.1/                              # 🚧 PowerShell 5.1 module (Step 1)
-│   ├── IdentityAuth.psm1               # Main module (hashtables, traditional logic)
-│   ├── IdentityAuth.psd1               # Module manifest
-│   ├── Private/                        # Private helper functions
-│   └── Public/                         # Exported public functions
-│
-├── PS7/                                # 🚧 PowerShell 7+ module (Step 1)
-│   ├── IdentityAuth7.psm1              # Main module (classes, enums, ternary)
-│   ├── IdentityAuth7.psd1              # Module manifest
-│   ├── Classes/                        # Class definitions
-│   ├── Enums/                          # Enum definitions
-│   ├── Private/                        # Private helper functions
-│   └── Public/                         # Exported public functions
-│
-├── Build/                              # 🚧 Build automation (Step 8)
-│   ├── Build-Module.ps1                # Combines .ps1 → single .psm1
-│   ├── Test-BeforeBuild.ps1            # Pre-build validation
-│   └── Publish-Module.ps1              # PowerShell Gallery publish
-│
-├── Distribution/                       # 📦 OUTPUT - Built modules
-│   ├── IdentityAuth.psm1               # SINGLE FILE for end users (PS5.1)
-│   ├── IdentityAuth.psd1               # Manifest
-│   ├── IdentityAuth7.psm1              # SINGLE FILE for end users (PS7+)
-│   ├── IdentityAuth7.psd1              # Manifest
-│   └── README.md                       # End-user quick start
-│
-├── Tests/                              # 🚧 Test infrastructure (Step 7)
-│   ├── Test-IdentityAuthManual.ps1     # Interactive testing menu
-│   └── Pester/                         # Pester v5 tests
-│
-├── .vscode/                            # ✅ VS Code configuration
-│   ├── settings.json                   # PowerShell formatting rules
-│   ├── tasks.json                      # Build/test/format tasks
-│   └── extensions.json                 # Recommended extensions
-│
-└── PSScriptAnalyzerSettings.psd1       # 🚧 Strict analysis rules (Step 1)
-```
+- ✅ **Multiple Authentication Methods**
+  - OAuth client credentials
+  - Username/Password
+  - MFA (OTP, Push notifications, SMS, Email)
+  - OOBAUTHPIN (SAML + PIN)
+  
+- ✅ **Session Management**
+  - Automatic token caching
+  - Token expiry detection
+  - Reusable sessions across multiple API calls
+
+- ✅ **Dual PowerShell Support**
+  - **IdentityAuth.psm1**: PowerShell 5.1+ (Windows-compatible)
+  - **IdentityAuth7.psm1**: PowerShell 7.0+ (Cross-platform with classes/enums)
+
+- ✅ **Security**
+  - No plaintext credential storage
+  - Secure credential handling with PSCredential
+  - In-memory only token storage
 
 ---
 
-## Build & Distribution Workflow
+## Quick Start
 
-### For Developers 🛠️
+### Installation
 
-**Work in organized source structure:**
-```
-PS5.1/
-├── Private/     # Helper functions
-└── Public/      # Exported functions
-
-PS7/
-├── Classes/     # Class definitions
-├── Enums/       # Enum definitions
-├── Private/     # Helper functions
-└── Public/      # Exported functions
-```
-
-**Build single-file modules:**
 ```powershell
-# Run build script (combines all .ps1 into one .psm1)
-.\Build\Build-Module.ps1 -Version All
+# Download the module
+cd ".\Identity Authentication\v2-Modernized\Distribution"
 
-# Or use VS Code: Press Ctrl+Shift+B
+# PowerShell 5.1 (Windows)
+Import-Module .\IdentityAuth.psd1
+
+# PowerShell 7+ (Windows/Linux/macOS)
+Import-Module .\IdentityAuth7.psd1
 ```
 
-**Output in Distribution/ folder:**
-```
-Distribution/
-├── IdentityAuth.psm1      # SINGLE FILE (PS5.1)
-├── IdentityAuth.psd1
-├── IdentityAuth7.psm1     # SINGLE FILE (PS7+)
-├── IdentityAuth7.psd1
-└── README.md
-```
+### Basic Usage
 
-### For End Users 📦
+#### OAuth Authentication
 
-**Receive Distribution/ folder contents:**
-- `IdentityAuth.psm1` + `IdentityAuth.psd1` (PowerShell 5.1+)
-- `IdentityAuth7.psm1` + `IdentityAuth7.psd1` (PowerShell 7+)
-
-**Simple import:**
 ```powershell
-# PowerShell 5.1+
-Import-Module .\IdentityAuth.psm1
+# Create OAuth credentials
+$clientId = 'your-client-id'
+$clientSecret = 'your-client-secret' | ConvertTo-SecureString -AsPlainText -Force
+$oauthCreds = New-Object PSCredential($clientId, $clientSecret)
 
-# PowerShell 7+
-Import-Module .\IdentityAuth7.psm1
+# Authenticate and get token
+$headers = Get-IdentityHeader -OAuthCreds $oauthCreds -PCloudURL 'https://subdomain.cyberark.cloud'
+
+# Use token with other scripts
+.\Accounts_Onboard_Utility.ps1 -logonToken $headers.Authorization -PVWAURL $PCloudURL -CSVFile accounts.csv
 ```
 
-**No setup required!** Just import the .psm1 file.
+#### Interactive Authentication (Username/Password)
+
+```powershell
+# Prompt for credentials
+$upCreds = Get-Credential -Message "Enter CyberArk credentials"
+
+# Authenticate with MFA prompts
+$headers = Get-IdentityHeader -UPCreds $upCreds -PCloudURL 'https://subdomain.cyberark.cloud'
+```
+
+#### OOBAUTHPIN (SAML + PIN)
+
+```powershell
+# Authenticate with SAML + PIN
+$headers = Get-IdentityHeader -IdentityUserName 'user@company.com' -PCloudURL 'https://subdomain.cyberark.cloud'
+
+# If PIN is already known
+$headers = Get-IdentityHeader -IdentityUserName 'user@company.com' -PIN '123456' -PCloudURL 'https://subdomain.cyberark.cloud'
+```
+
+---
+
+## Authentication Flows
+
+### 1. OAuth Flow
+Best for: Automation, service accounts, CI/CD pipelines
+
+```powershell
+$oauthCreds = New-Object PSCredential('client-id', ('client-secret' | ConvertTo-SecureString -AsPlainText -Force))
+$headers = Get-IdentityHeader -OAuthCreds $oauthCreds -PCloudURL $PCloudURL
+```
+
+**Returns:** Hashtable with `Authorization` and `X-IDAP-NATIVE-CLIENT` headers
+
+### 2. Username/Password with MFA
+Best for: Interactive sessions with MFA
+
+```powershell
+$upCreds = Get-Credential
+$headers = Get-IdentityHeader -UPCreds $upCreds -PCloudURL $PCloudURL
+```
+
+**Supports:** OTP codes, Push notifications, SMS, Email verification
+
+### 3. OOBAUTHPIN (SAML + PIN)
+Best for: SAML-configured tenants requiring PIN verification
+
+```powershell
+$headers = Get-IdentityHeader -IdentityUserName 'user@domain.com' -PCloudURL $PCloudURL
+```
+
+**Flow:**
+1. Displays SAML authentication URL
+2. User completes SAML login in browser
+3. PIN code received via email/SMS
+4. User enters PIN in PowerShell prompt
+5. Returns authentication headers
+
+---
+
+## Session Management
+
+### Reusing Sessions
+
+```powershell
+# First authentication
+$headers1 = Get-IdentityHeader -OAuthCreds $creds -PCloudURL $PCloudURL
+
+# Reuses cached session (no new authentication)
+$headers2 = Get-IdentityHeader -OAuthCreds $creds -PCloudURL $PCloudURL
+
+# Force new authentication
+$headers3 = Get-IdentityHeader -OAuthCreds $creds -PCloudURL $PCloudURL -ForceNewSession
+```
+
+### Check Session Status
+
+```powershell
+# Get current session details
+$session = Get-IdentitySession
+
+# Check token expiry
+Write-Host "Token expires: $($session.TokenExpiry)"
+Write-Host "Is expired: $($session.IsExpired())"
+```
+
+### Clear Session
+
+```powershell
+# Logout and clear session
+Clear-IdentitySession
+
+# Clear session without logging out
+Clear-IdentitySession -NoLogout
+```
+
+---
+
+## Return Value
+
+All authentication functions return a **hashtable** with CyberArk API headers:
+
+```powershell
+@{
+    Authorization        = "Bearer eyJhbGc..."
+    X-IDAP-NATIVE-CLIENT = "true"
+}
+```
+
+**Usage with other scripts:**
+
+```powershell
+$headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL $PCloudURL
+
+# Option 1: Pass Authorization header only (for -logonToken parameter)
+.\Script.ps1 -logonToken $headers.Authorization
+
+# Option 2: Use full headers hashtable
+Invoke-RestMethod -Uri $apiUrl -Headers $headers
+```
+
+---
+
+## Parameters
+
+### Get-IdentityHeader
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `IdentityUserName` | String | Yes* | Username for interactive authentication |
+| `UPCreds` | PSCredential | Yes* | Credentials for UP authentication |
+| `OAuthCreds` | PSCredential | Yes* | OAuth client ID (username) and secret (password) |
+| `PIN` | String | No | Pre-provided PIN for OOBAUTHPIN flow |
+| `PCloudURL` | String | Yes | Privilege Cloud URL |
+| `IdentityTenantURL` | String | No | Identity URL (auto-discovered if not provided) |
+| `ForceNewSession` | Switch | No | Force new authentication (ignore cached session) |
+
+*One of `IdentityUserName`, `UPCreds`, or `OAuthCreds` is required
+
+---
+
+## Examples
+
+### Example 1: OAuth with EPV-API-Common Module
+
+```powershell
+Import-Module EPV-API-Common
+Import-Module IdentityAuth7
+
+# Authenticate to Identity
+$oauthCreds = Get-Credential -Message "Enter OAuth credentials"
+$headers = Get-IdentityHeader -OAuthCreds $oauthCreds -PCloudURL 'https://subdomain.cyberark.cloud'
+
+# Use with EPV-API-Common functions
+$pvwaSession = New-PASSession -BaseURI 'https://subdomain.cyberark.cloud' -IdentityHeaders $headers
+Get-PASAccount -search "admin"
+```
+
+### Example 2: Accounts Onboard Utility
+
+```powershell
+# Authenticate once
+$headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL 'https://subdomain.cyberark.cloud'
+
+# Use token with Accounts Onboard Utility
+.\Accounts_Onboard_Utility.ps1 `
+    -PVWAURL 'https://subdomain.cyberark.cloud' `
+    -logonToken $headers.Authorization `
+    -CSVFile "accounts.csv"
+```
+
+### Example 3: MFA Push Notification
+
+```powershell
+$upCreds = Get-Credential -Message "Enter username and password"
+$headers = Get-IdentityHeader -UPCreds $upCreds -PCloudURL 'https://subdomain.cyberark.cloud'
+
+# Output:
+# Challenge 1
+# There are 2 options to choose from:
+#   1 - UP - Enter Password
+#   2 - PF - Approve Login from CyberArk Mobile App
+# Please enter option number (1-2): 2
+# Waiting for push notification approval...
+```
+
+### Example 4: OOBAUTHPIN with Pre-Provided PIN
+
+```powershell
+# Useful for automation when PIN is retrieved programmatically
+$pin = Get-PINFromSMS  # Your custom function to retrieve PIN
+$headers = Get-IdentityHeader -IdentityUserName 'user@company.com' -PIN $pin -PCloudURL 'https://subdomain.cyberark.cloud'
+```
+
+---
+
+## Troubleshooting
+
+### "Invalid URI: The hostname could not be parsed"
+
+**Cause:** Identity URL discovery failed
+
+**Solution:** Provide `-IdentityTenantURL` explicitly:
+
+```powershell
+$headers = Get-IdentityHeader -OAuthCreds $creds `
+    -PCloudURL 'https://subdomain.cyberark.cloud' `
+    -IdentityTenantURL 'https://abc123.id.cyberark.cloud'
+```
+
+### "PropertyNotFoundException" errors
+
+**Cause:** Using old cached module after rebuild
+
+**Solution:** Reimport the module:
+
+```powershell
+Remove-Module IdentityAuth* -Force -ErrorAction SilentlyContinue
+Import-Module .\IdentityAuth7.psd1 -Force
+```
+
+### Session token not working with other scripts
+
+**Cause:** Script expects string, module returns hashtable
+
+**Solution:** Pass `.Authorization` property:
+
+```powershell
+$headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL $PCloudURL
+.\OtherScript.ps1 -logonToken $headers.Authorization  # Pass string value
+```
+
+---
+
+## PowerShell 5.1 vs 7+ Differences
+
+| Feature | PS 5.1 (IdentityAuth) | PS 7+ (IdentityAuth7) |
+|---------|----------------------|----------------------|
+| Session Object | Hashtable | Class (IdentitySession) |
+| Enums | Strings | Enums (AuthenticationMechanism) |
+| Type Safety | Basic | Enhanced with classes |
+| Syntax | Traditional if/else | Ternary operators, null coalescing |
+| Performance | Standard | Slightly faster |
+| Compatibility | Windows only | Cross-platform |
+
+**Both versions have identical functionality and return the same results.**
+
+---
+
+## Requirements
+
+- PowerShell 5.1+ (IdentityAuth.psm1) or PowerShell 7.0+ (IdentityAuth7.psm1)
+- Network access to CyberArk Identity and Privilege Cloud
+- Valid CyberArk credentials (OAuth or user account)
 
 ---
 
 ## Documentation
 
-### 📖 [IMPLEMENTATION-PLAN.md](Documentation/IMPLEMENTATION-PLAN.md)
-**Comprehensive 9-step implementation plan** with:
-- Detailed task breakdowns for each step
-- 5-7 week timeline with dependencies
-- Success criteria and testing strategies
-- Risk mitigation and maintenance plan
-- Complete code examples and patterns
-
-### 🏗️ [ARCHITECTURE-DESIGN.md](Documentation/ARCHITECTURE-DESIGN.md)
-**Architecture documentation with Mermaid diagrams** including:
-- **4 Process Flow Diagrams:**
-  - OOBAUTHPIN Authentication Flow
-  - OAuth Authentication Flow with Auto-Refresh
-  - Standard Challenge Flow (UP/OTP/Push)
-  - Token Refresh Logic Flow
-- **3 Class Structure Diagrams:**
-  - Core Classes (IdentitySession, IdentityAuthResponse, etc.)
-  - Enum Definitions (AuthenticationMechanism, ChallengeType, etc.)
-  - Private Function Organization
-- Module structure and exports
-- Session state management (PS7 classes vs PS5.1 hashtables)
-- Return value structure and compatibility
-- Security architecture with defense-in-depth layers
-- API integration details
+- [Architecture Design](Documentation/ARCHITECTURE-DESIGN.md) - Detailed architecture and flow diagrams
+- [Developer Guide](Documentation/DEVELOPER-GUIDE.md) - Contributing and development setup
+- [Migration Guide](Documentation/MIGRATION-GUIDE.md) - Migrating from v1 module
 
 ---
 
-## Quick Start (After Implementation)
+## License
 
-### PowerShell 5.1 or 7+
-```powershell
-# Import module
-Import-Module .\IdentityAuth.psm1  # PS 5.1
-# OR
-Import-Module .\IdentityAuth7.psm1  # PS 7+ (recommended)
-
-# OAuth Authentication (recommended for automation)
-$creds = Get-Credential -Message "ClientID (Username) and ClientSecret (Password)"
-$headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL "https://tenant.cyberark.cloud"
-
-# Use with Accounts_Onboard_Utility.ps1
-.\Accounts_Onboard_Utility.ps1 -PVWAURL "https://tenant.privilegecloud.cyberark.cloud" -logonToken $headers
-
-# Interactive with MFA
-$token = Get-IdentityHeader -IdentityUserName "admin@company.com" -PCloudURL "https://tenant.cyberark.cloud" -Verbose
-
-# With OOBAUTHPIN
-$token = Get-IdentityHeader -IdentityUserName "admin@company.com" -PCloudURL "https://tenant.cyberark.cloud"
-# Follow the displayed URL instructions, complete SAML auth, enter PIN when prompted
-```
-
-### Direct REST API Usage
-```powershell
-$headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL "https://tenant.cyberark.cloud"
-
-# Use headers directly for any PCloud API call
-$accounts = Invoke-RestMethod -Uri "https://tenant.privilegecloud.cyberark.cloud/PasswordVault/API/Accounts" -Headers $headers
-```
+Apache License 2.0 - See [LICENSE](../../LICENSE) for details
 
 ---
 
-## Authentication Methods Supported
+## Support
 
-| Method | Description | Auto-Refresh | Use Case |
-|--------|-------------|--------------|----------|
-| **OAuth** | Client ID + Client Secret | ✅ Yes | Automation, scripts, CI/CD |
-| **Username/Password (UP)** | Interactive or PSCredential | ❌ Manual re-auth | User sessions |
-| **Email OTP** | One-time code via email | ❌ Manual re-auth | MFA with email |
-| **SMS OTP** | One-time code via SMS | ❌ Manual re-auth | MFA with phone |
-| **Push Notification** | Mobile app approval | ❌ Manual re-auth | MFA with CyberArk app |
-| **OOBAUTHPIN** | SAML + PIN code | ❌ Manual re-auth | Federated identity |
+For issues and feature requests, please open an issue in the GitHub repository.
 
 ---
 
-## Implementation Status
-
-### ✅ Completed
-- [x] Implementation plan (9 steps, 5-7 weeks)
-- [x] Architecture design with Mermaid diagrams
-- [x] Documentation structure
-- [x] Requirements gathering
-- [x] API flow analysis
-
-### 🚧 In Progress
-- [ ] Step 1: Create dual module structure (PS5.1 + PS7)
-- [ ] Step 2: Implement OOBAUTHPIN flow
-- [ ] Step 3: Modernize OAuth with multi-format credentials
-- [ ] Step 4: Replace Write-LogMessage with standard streams
-- [ ] Step 5: Comprehensive error handling
-- [ ] Step 6: Automatic token refresh
-- [ ] Step 7: VS Code tasks and testing infrastructure
-- [ ] Step 8: User and developer README documentation
-- [ ] Step 9: Final testing and validation
-
----
-
-## Key Design Decisions
-
-### Return Value: Hashtable with Headers
-**Decision:** Return hashtable with Authorization and X-IDAP-NATIVE-CLIENT keys
-**Rationale:**
-- Matches current IdentityAuth.psm1 exactly: `@{Authorization = "Bearer token"; 'X-IDAP-NATIVE-CLIENT' = 'true'}`
-- Direct usage: `Invoke-RestMethod -Uri $url -Headers $headers`
-- Accounts_Onboard_Utility.ps1 supports both string and hashtable formats
-- Eliminates need to manually construct headers
-
-### Dual Module Approach
-**Decision:** Separate modules for PS5.1 and PS7+
-**Rationale:**
-- PS7 module uses classes, enums, ternary operators, null-coalescing
-- PS5.1 module uses hashtables and traditional logic
-- Same functionality, optimized for each version
-- Users choose based on their environment
-
-### Session State Management
-**Decision:** `$script:CurrentSession` with automatic OAuth refresh
-**Rationale:**
-- OAuth can auto-refresh (stored credentials)
-- MFA requires manual re-authentication (security)
-- Session persists across multiple function calls
-- Expiry detection with 60-second warning
-
-### No Write-Host
-**Decision:** Zero Write-Host calls, use proper streams
-**Rationale:**
-- PSScriptAnalyzer compliance
-- PowerShell best practices
-- Automation-friendly (Write-Host breaks pipelines)
-- Use Write-Output for data, Write-Verbose for details
-
----
-
-## PowerShell Version Comparison
-
-| Feature | PS 5.1 Module | PS 7+ Module |
-|---------|---------------|--------------|
-| **Classes** | ✅ Hashtables | ✅ Full classes |
-| **Enums** | ✅ Strings | ✅ Typed enums |
-| **Ternary Operator** | ❌ if/else | ✅ `$x ? $a : $b` |
-| **Null Coalescing** | ❌ Explicit checks | ✅ `$x ?? $default` |
-| **Pipeline Chain** | ❌ Separate statements | ✅ `cmd1 && cmd2` |
-| **Splatting** | ✅ Yes | ✅ Yes |
-| **SecureString** | ✅ DPAPI (Windows) | ✅ Less secure non-Windows |
-| **Functionality** | ✅ 100% feature parity | ✅ 100% feature parity |
-
----
-
-## Security Highlights
-
-🔐 **Credential Handling:**
-- PSCredential with SecureString (DPAPI encrypted on Windows)
-- No plaintext password storage
-- Automatic cleanup in finally blocks (ZeroFreeBSTR)
-
-🔐 **Token Storage:**
-- In-memory only (`$script:CurrentSession`)
-- Never written to disk
-- Script scope isolation (not global)
-
-🔐 **Transport Security:**
-- HTTPS only
-- TLS 1.2+ required
-- Certificate validation (disable only for testing with warning)
-
-🔐 **Logging:**
-- Sensitive data masked by default
-- Opt-in transcript logging
-- No credentials in logs
-
----
-
-## Contributing
-
-This module is currently in the planning phase. Once implementation begins:
-
-1. Follow [IMPLEMENTATION-PLAN.md](Documentation/IMPLEMENTATION-PLAN.md) for step-by-step guidance
-2. All code must pass PSScriptAnalyzer with zero violations
-3. Use splatting exclusively (no backticks)
-4. Test on both PS5.1 and PS7+
-5. Update documentation with any deviations from plan
-
----
-
-## FAQ
-
-**Q: When will this be ready?**
-A: Estimated 5-7 weeks for full implementation (9 steps)
-
-**Q: Can I use this now?**
-A: No, still in planning phase. Use the current IdentityAuth.psm1 (v1) for production.
-
-**Q: Will this break existing scripts?**
-A: Return value changes from hashtable to string. Migration path documented in implementation plan.
-
-**Q: Why two modules (PS5.1 and PS7)?**
-A: Maximum compatibility (PS5.1) + maximum modern features (PS7 classes/enums). Choose based on your environment.
-
-**Q: What about on-premises PVWA?**
-A: This module is for **Privilege Cloud only** (Identity authentication). On-prem uses CyberArk Authentication, not Identity.
-
-**Q: Why remove psPAS support?**
-A: Simplifies the module. Direct API calls or psPAS module can still be used, just needs manual header construction: `@{Authorization = $token}`.
-
----
-
-## Contact
-
-Questions or feedback during implementation? Open an issue in the epv-api-scripts repository.
-
----
-
-**Last Updated:** 2026-01-28
-**Version:** 2.0.0-planning
+**Last Updated:** 2026-01-28  
+**Version:** 2.0.0

@@ -34,6 +34,27 @@ function New-IdentitySession {
         [hashtable]$Properties
     )
 
-    # TODO: Implementation
-    throw "Not yet implemented"
+    Write-Verbose "Creating new Identity session for user: $($Properties.Username)"
+
+    # PS5.1: Use hashtable instead of class
+    $session = @{
+        Token             = $Properties.Token
+        TokenExpiry       = $Properties.TokenExpiry
+        IdentityURL       = $Properties.IdentityURL
+        PCloudURL         = $Properties.PCloudURL
+        Username          = $Properties.Username
+        SessionId         = $Properties.SessionId
+        AuthMethod        = $Properties.AuthMethod
+        StoredCredentials = $Properties.StoredCredentials
+        Metadata          = @{
+            CreatedAt     = Get-Date
+            LastRefreshed = Get-Date
+            RefreshCount  = 0
+            RefreshToken  = $null
+        }
+    }
+
+    Write-Verbose "Session created. Expires: $($session.TokenExpiry)"
+
+    return $session
 }

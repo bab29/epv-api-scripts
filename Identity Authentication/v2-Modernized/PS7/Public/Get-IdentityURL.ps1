@@ -35,7 +35,7 @@ function Get-IdentityURL {
     Write-Verbose "PCloud base URL: $pcloudBase"
 
     try {
-        $response = Invoke-WebRequest -Uri $pcloudBase -ErrorAction SilentlyContinue
+        $response = Invoke-WebRequest -Uri $pcloudBase -UseBasicParsing -ErrorAction SilentlyContinue
     } catch {
         if ($_.Exception.Response) {
             $response = $_.Exception.Response

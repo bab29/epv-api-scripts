@@ -45,6 +45,37 @@ function Invoke-Rest {
         [hashtable]$Headers
     )
 
-    # TODO: Implementation
-    throw "Not yet implemented"
+    Write-Verbose "API Call: $Method $Uri"
+
+    $restParams = @{
+        Uri         = $Uri
+        Method      = $Method
+        ContentType = 'application/json'
+        TimeoutSec  = 30
+    }
+
+    if ($Headers) {
+        $restParams.Headers = $Headers
+        Write-Verbose "Headers: $(($Headers.Keys | ForEach-Object { "$_=$($Headers[$_])" }) -join ', ')"
+    }
+
+    if ($Body) {
+        if ($Body -is [string]) {
+            $restParams.Body = $Body
+        }
+        else {
+            $restParams.Body = $Body | ConvertTo-Json -Depth 10 -Compress
+        }
+        Write-Verbose "Body: $($restParams.Body)"
+    }
+
+    try {
+        $response = Invoke-RestMethod @restParams
+        Write-Verbose "Response received: $($response | ConvertTo-Json -Depth 5 -Compress)"
+        return $response
+    }
+    catch {
+        Write-Verbose "API Error: $($_.Exception.Message)"
+        throw
+    }
 }

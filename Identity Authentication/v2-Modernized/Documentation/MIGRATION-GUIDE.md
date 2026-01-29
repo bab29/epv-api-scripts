@@ -8,21 +8,30 @@ IdentityAuth v2 is a complete rewrite with new authentication methods, better er
 
 ### Return Value Format
 
-**v1 (Current):**
+**v1 (Legacy):**
 ```powershell
-# Returns Dictionary[String,String]
+# Returns String (Bearer token only)
+$token = Get-IdentityHeader -OAuthCreds $creds -PCloudURL $url
+# Example: "Bearer eyJhbGc..."
+```
+
+**v2 (Current):**
+```powershell
+# Returns Hashtable with headers
 $headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL $url
 # Keys: Authorization, X-IDAP-NATIVE-CLIENT
 ```
 
-**v2 (New):**
-```powershell
-# Returns same format - NO BREAKING CHANGE!
-$headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL $url
-# Keys: Authorization, X-IDAP-NATIVE-CLIENT
-```
+⚠️ **Breaking Change:** v2 returns hashtable instead of string.
 
-✅ **Compatible!** Return value format is unchanged.
+**Migration:** Use `$headers.Authorization` for compatibility:
+```powershell
+# v1 style
+.\Script.ps1 -logonToken $token
+
+# v2 equivalent
+.\Script.ps1 -logonToken $headers.Authorization
+```
 
 ### Parameter Changes
 
@@ -30,10 +39,13 @@ $headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL $url
 |-----------|----|----|--------|
 | `OAuthCreds` | ✅ | ✅ | Unchanged |
 | `PCloudURL` | ✅ | ✅ | Unchanged |
-| `IdentityURL` | ✅ (optional) | ✅ (optional) | Unchanged |
-| `logonToken` | ❌ | ❌ | Not supported (use return value) |
+| `IdentityTenantURL` | ✅ (optional) | ✅ (optional) | Renamed from IdentityURL |
+| `UPCreds` | ❌ | ✅ | NEW - Username/Password credentials |
+| `IdentityUserName` | ❌ | ✅ | NEW - Interactive auth username |
+| `PIN` | ❌ | ✅ | NEW - OOBAUTHPIN support |
+| `ForceNewSession` | ❌ | ✅ | NEW - Bypass token cache |
 
-✅ **Compatible!** All parameters work the same way.
+⚠️ **Minor Breaking Change:** `IdentityURL` renamed to `IdentityTenantURL` (but still optional).
 
 ## New Features in v2
 
@@ -41,27 +53,27 @@ $headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL $url
 
 **OOBAUTHPIN (NEW!):**
 ```powershell
-# Interactive PIN authentication
-$headers = Get-IdentityHeader -Username "user@domain.com" -PCloudURL $url
+# Interactive SAML + PIN authentication
+$headers = Get-IdentityHeader -IdentityUserName "user@domain.com" -PCloudURL $url
+# Opens browser for SAML, prompts for PIN
 
 # Pre-provided PIN
-$headers = Get-IdentityHeader -Username "user@domain.com" -PINCode "123456" -PCloudURL $url
+$headers = Get-IdentityHeader -IdentityUserName "user@domain.com" -PIN "123456" -PCloudURL $url
 ```
 
-**Username/Password (NEW!):**
+**Username/Password with MFA (NEW!):**
 ```powershell
+# Interactive - prompts for MFA method selection
 $creds = Get-Credential
-$headers = Get-IdentityHeader -Username $creds.UserName -Credential $creds -PCloudURL $url
+$headers = Get-IdentityHeader -UPCreds $creds -PCloudURL $url
+# Supports: OTP, Push, SMS, Email verification
 ```
 
-**Email/SMS OTP (NEW!):**
+**Interactive Username (NEW!):**
 ```powershell
-$headers = Get-IdentityHeader -Username "user@domain.com" -OTPCode "987654" -PCloudURL $url
-```
-
-**Push Notification (NEW!):**
-```powershell
-$headers = Get-IdentityHeader -Username "user@domain.com" -UsePush -PCloudURL $url
+# For non-credential auth flows
+$headers = Get-IdentityHeader -IdentityUserName "user@domain.com" -PCloudURL $url
+# Detects available auth methods automatically
 ```
 
 ### OAuth Token Caching

@@ -27,6 +27,15 @@ function ConvertFrom-SessionToHeaders {
         [hashtable]$Session
     )
 
-    # TODO: Implementation
-    throw "Not yet implemented"
+    Write-Verbose "Converting session to headers"
+
+    # PS5.1: Check expiry manually (no IsExpired() method)
+    if ($Session.TokenExpiry -and ((Get-Date) -gt $Session.TokenExpiry)) {
+        throw "Session token has expired. Please re-authenticate."
+    }
+
+    return @{
+        'Authorization'        = "Bearer $($Session.Token)"
+        'X-IDAP-NATIVE-CLIENT' = 'true'
+    }
 }

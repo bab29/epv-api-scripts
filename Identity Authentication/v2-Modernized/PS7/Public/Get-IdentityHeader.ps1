@@ -111,7 +111,7 @@ function Get-IdentityHeader {
         $token = $response.access_token
         $expiresIn = $response.expires_in ?? 3600
 
-        # Create session
+        # Create session - OAuth has no SessionId
         $session = New-IdentitySession -Properties @{
             Token             = $token
             TokenExpiry       = (Get-Date).AddSeconds($expiresIn)
@@ -120,12 +120,17 @@ function Get-IdentityHeader {
             Username          = $clientId
             AuthMethod        = [AuthenticationMechanism]::OAuth
             StoredCredentials = $OAuthCreds
+            SessionId         = $null
         }
 
-        $session.Metadata.RefreshToken = $answerResponse.Result.RefreshToken ?? $null
+        # Safe property check for refresh token
+        if ($response.PSObject.Properties['refresh_token']) {
+            $session.Metadata.RefreshToken = $response.refresh_token
+        }
+
         $script:CurrentSession = $session
         $headers = Format-Token -Token $token
-        return $headers.Authorization
+        return $headers
     }
 
     # Interactive authentication
@@ -179,7 +184,8 @@ function Get-IdentityHeader {
             $headers = Format-Token -Token $token
             return $headers
         } else {
-            throw "OOBAUTHPIN authentication failed: $($answerResponse.Message)"
+            $errorMsg = $answerResponse.PSObject.Properties['Message'] ? $answerResponse.Message : 'Unknown error'
+            throw "OOBAUTHPIN authentication failed: $errorMsg"
         }
     }
 
@@ -214,6 +220,7 @@ function Get-IdentityHeader {
         $headers = Format-Token -Token $token
         return $headers
     } else {
-        throw "Authentication failed: $($answerResponse.Message)"
+        $errorMsg = $answerResponse.PSObject.Properties['Message'] ? $answerResponse.Message : 'Unknown error'
+        throw "Authentication failed: $errorMsg"
     }
 }
