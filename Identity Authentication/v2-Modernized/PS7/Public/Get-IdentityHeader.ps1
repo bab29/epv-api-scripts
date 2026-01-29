@@ -15,12 +15,24 @@
     Used for OAuth client credentials flow (recommended for automation).
 
 .PARAMETER Username
-    Username for interactive authentication (OOBAUTHPIN).
-    Used for user-based authentication requiring PIN verification.
+    Username for interactive authentication (OOBAUTHPIN, UsernamePassword, MFA).
+    Used for user-based authentication flows.
+
+.PARAMETER Credential
+    PSCredential for Username/Password authentication.
+    Password is extracted and sent securely to Identity.
 
 .PARAMETER PINCode
     (Optional) Pre-provided PIN code for OOBAUTHPIN authentication.
     If not provided, user will be prompted after PIN is sent to their device.
+
+.PARAMETER OTPCode
+    (Optional) One-Time Password for Email/SMS OTP authentication.
+    If not provided, user will be prompted.
+
+.PARAMETER UsePush
+    Use Push notification authentication to mobile device.
+    User approves/denies on their device.
 
 .PARAMETER PCloudURL
     Privilege Cloud URL. Can be in any of these formats:
@@ -73,6 +85,19 @@
     # OOBAUTHPIN with pre-provided PIN
     $headers = Get-IdentityHeader -Username "user@domain.com" -PINCode "123456" -PCloudURL "https://tenant.cyberark.cloud"
 
+.EXAMPLE
+    # Username/Password authentication
+    $creds = Get-Credential
+    $headers = Get-IdentityHeader -Username $creds.UserName -Credential $creds -PCloudURL "https://tenant.cyberark.cloud"
+
+.EXAMPLE
+    # Email/SMS OTP authentication
+    $headers = Get-IdentityHeader -Username "user@domain.com" -OTPCode "987654" -PCloudURL "https://tenant.cyberark.cloud"
+
+.EXAMPLE
+    # Push notification authentication
+    $headers = Get-IdentityHeader -Username "user@domain.com" -UsePush -PCloudURL "https://tenant.cyberark.cloud"
+
 .NOTES
     Version:        2.0.0
     Author:         CyberArk
@@ -81,7 +106,14 @@
     Requirements:
     - PowerShell 5.1 or later
     - Network access to Identity tenant
-    - Valid OAuth client credentials
+    - Valid credentials for chosen auth method
+    
+    Supported Authentication Methods:
+    - OAuth (Client Credentials) - Recommended for automation
+    - OOBAUTHPIN - PIN sent to device/email
+    - Username/Password - Traditional credentials
+    - Email/SMS OTP - One-time password
+    - Push - Mobile device approval
     
     Security Notes:
     - OAuth tokens are cached in memory only (not persisted to disk)
@@ -97,10 +129,22 @@ function Get-IdentityHeader {
         [PSCredential]$OAuthCreds,
         
         [Parameter(Mandatory, ParameterSetName = 'OOBAUTHPIN')]
+        [Parameter(Mandatory, ParameterSetName = 'UsernamePassword')]
+        [Parameter(Mandatory, ParameterSetName = 'OTP')]
+        [Parameter(Mandatory, ParameterSetName = 'Push')]
         [string]$Username,
         
         [Parameter(ParameterSetName = 'OOBAUTHPIN')]
         [string]$PINCode,
+        
+        [Parameter(Mandatory, ParameterSetName = 'UsernamePassword')]
+        [PSCredential]$Credential,
+        
+        [Parameter(ParameterSetName = 'OTP')]
+        [string]$OTPCode,
+        
+        [Parameter(Mandatory, ParameterSetName = 'Push')]
+        [switch]$UsePush,
         
         [Parameter(Mandatory)]
         [string]$PCloudURL,
@@ -196,6 +240,82 @@ Please check your device and enter the PIN code below.
                 $authToken = Submit-OOBAUTHPINCode -SessionId $authSession.SessionId -MechanismId $mechanism.MechanismId -PINCode $PINCode -IdentityTenantURL $IdentityURL
                 
                 Write-Verbose "OOBAUTHPIN authentication successful"
+                
+                # Format headers
+                $headers = Format-IdentityHeaders -AccessToken $authToken
+                
+                return $headers
+            }
+            
+            # Username/Password authentication
+            if ($PSCmdlet.ParameterSetName -eq 'UsernamePassword') {
+                Write-Verbose "Authenticating with Username/Password"
+                
+                # Start authentication
+                $authSession = Start-OOBAUTHPINAuthentication -Username $Username -IdentityTenantURL $IdentityURL
+                
+                # Find Username/Password mechanism
+                $mechanism = Get-AuthenticationMechanism -Challenges $authSession.Challenges -AnswerType 'UP'
+                
+                # Submit password
+                $authToken = Invoke-UsernamePasswordAuth -SessionId $authSession.SessionId -MechanismId $mechanism.MechanismId -Credential $Credential -IdentityTenantURL $IdentityURL
+                
+                Write-Verbose "Username/Password authentication successful"
+                
+                # Format headers
+                $headers = Format-IdentityHeaders -AccessToken $authToken
+                
+                return $headers
+            }
+            
+            # OTP authentication
+            if ($PSCmdlet.ParameterSetName -eq 'OTP') {
+                Write-Verbose "Authenticating with OTP"
+                
+                # Start authentication
+                $authSession = Start-OOBAUTHPINAuthentication -Username $Username -IdentityTenantURL $IdentityURL
+                
+                # Find OTP mechanism
+                $mechanism = Get-AuthenticationMechanism -Challenges $authSession.Challenges -AnswerType 'Text'
+                
+                # Get OTP from user if not provided
+                if (-not $OTPCode) {
+                    Write-Host @"
+
+OTP Authentication
+==================
+An OTP code has been sent to your registered email/phone.
+Please enter the code below.
+
+"@
+                    $OTPCode = Read-Host -Prompt "Enter OTP code"
+                }
+                
+                # Submit OTP
+                $authToken = Submit-OTPCode -SessionId $authSession.SessionId -MechanismId $mechanism.MechanismId -OTPCode $OTPCode -IdentityTenantURL $IdentityURL
+                
+                Write-Verbose "OTP authentication successful"
+                
+                # Format headers
+                $headers = Format-IdentityHeaders -AccessToken $authToken
+                
+                return $headers
+            }
+            
+            # Push authentication
+            if ($PSCmdlet.ParameterSetName -eq 'Push') {
+                Write-Verbose "Authenticating with Push"
+                
+                # Start authentication
+                $authSession = Start-OOBAUTHPINAuthentication -Username $Username -IdentityTenantURL $IdentityURL
+                
+                # Find Push mechanism
+                $mechanism = Get-AuthenticationMechanism -Challenges $authSession.Challenges -AnswerType 'StartOob'
+                
+                # Start push and wait for approval
+                $authToken = Start-PushAuthentication -SessionId $authSession.SessionId -MechanismId $mechanism.MechanismId -IdentityTenantURL $IdentityURL
+                
+                Write-Verbose "Push authentication successful"
                 
                 # Format headers
                 $headers = Format-IdentityHeaders -AccessToken $authToken
