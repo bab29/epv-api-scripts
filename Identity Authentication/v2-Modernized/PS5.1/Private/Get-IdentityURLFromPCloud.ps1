@@ -7,7 +7,7 @@
     Constructs the base CyberArk URL and makes an HTTP request to discover
     the actual Identity URL through redirect. Falls back to string replacement
     if HTTP discovery fails.
-    
+
     This matches the v1 behavior which uses HTTP redirects to find the correct
     Identity URL, handling cases where subdomain doesn't match
     (e.g., serviceslab.privilegecloud → abi4738.id)
@@ -27,13 +27,13 @@ function Get-IdentityURLFromPCloud {
         $subdomain = $Matches['sub']
         $topLevel = $Matches['top']
         $baseUrl = "https://$subdomain.cyberark.$topLevel"
-        
+
         Write-Verbose "Attempting HTTP redirect discovery from: $baseUrl"
-        
+
         try {
             # Make HTTP request and follow redirects to discover Identity URL
             $response = Invoke-WebRequest -Uri $baseUrl -Method Get -MaximumRedirection 5 -ErrorAction Stop
-            
+
             # Extract Identity URL from response
             if ($PSVersionTable.PSVersion.Major -gt 5) {
                 # PowerShell 7+
@@ -42,7 +42,7 @@ function Get-IdentityURLFromPCloud {
                 # PowerShell 5.1
                 $identityHost = $response.BaseResponse.ResponseUri.Host
             }
-            
+
             if ($identityHost -and $identityHost -like '*.id.cyberark.*') {
                 $identityURL = "https://$identityHost"
                 Write-Verbose "Identity URL discovered via HTTP redirect: $identityURL"
@@ -54,7 +54,7 @@ function Get-IdentityURLFromPCloud {
             Write-Verbose "HTTP redirect discovery failed: $($_.Exception.Message), using fallback"
         }
     }
-    
+
     # Fallback: Simple string replacement (works for most tenants)
     Write-Verbose "Using string replacement fallback method"
     if ($PCloudURL -match 'https?://([^.]+)\.(?:privilegecloud\.)?cyberark\.cloud') {
@@ -66,4 +66,3 @@ function Get-IdentityURLFromPCloud {
         throw "Unable to derive Identity URL from PCloud URL: $PCloudURL. Expected format: https://subdomain.privilegecloud.cyberark.cloud"
     }
 }
-

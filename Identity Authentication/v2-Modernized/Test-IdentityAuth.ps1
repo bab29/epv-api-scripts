@@ -368,7 +368,8 @@ function Test-ErrorHandling {
             }
             
             Write-Host "    Testing with URL: $testUrl" -ForegroundColor Gray
-            $null = Get-IdentityHeader -OAuthCreds $badCreds -PCloudURL $testUrl -ErrorAction Stop
+            # Use -Force to bypass token cache and force new authentication attempt
+            $null = Get-IdentityHeader -OAuthCreds $badCreds -PCloudURL $testUrl -Force -ErrorAction Stop
             Write-TestResult "Invalid Credentials Error" $false "Should have thrown error"
         } catch {
             Write-TestResult "Invalid Credentials Error" $true
