@@ -40,8 +40,10 @@ PowerShell module for authenticating to CyberArk Identity Security Platform with
 ### Installation
 
 ```powershell
-# Download the module
-cd ".\Identity Authentication\v2-Modernized\Distribution"
+# Download the module files
+# IdentityAuth.psm1 + IdentityAuth.psd1 (PS 5.1+)
+# OR
+# IdentityAuth7.psm1 + IdentityAuth7.psd1 (PS 7+)
 
 # PowerShell 5.1 (Windows)
 Import-Module .\IdentityAuth.psd1

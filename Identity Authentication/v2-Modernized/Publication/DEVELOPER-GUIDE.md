@@ -4,7 +4,7 @@
 
 - [Architecture Overview](#architecture-overview)
 - [Development Setup](#development-setup)
-- [Code Structure](#code-structure)
+- [Module Functions](#module-functions)
 - [Adding New Authentication Methods](#adding-new-authentication-methods)
 - [Testing Guidelines](#testing-guidelines)
 - [Build Process](#build-process)
@@ -13,28 +13,22 @@
 
 ## Architecture Overview
 
-### Module Structure
+### Module Distribution
 
-```
-v2-Modernized/
-├── PS5.1/                      # PowerShell 5.1 version
-│   ├── Private/                # Internal helper functions
-│   ├── Public/                 # Exported functions
-│   ├── IdentityAuth.psm1      # Module script
-│   └── IdentityAuth.psd1      # Module manifest
-├── PS7/                        # PowerShell 7+ version
-│   ├── Classes/                # PowerShell classes
-│   ├── Enums/                  # PowerShell enums
-│   ├── Private/                # Internal helper functions
-│   ├── Public/                 # Exported functions
-│   ├── IdentityAuth.psm1      # Module script
-│   └── IdentityAuth.psd1      # Module manifest
-├── Build/                      # Build scripts
-├── Tests/                      # Pester tests
-├── Tools/                      # Diagnostic/utility tools
-├── Examples/                   # Usage examples
-└── Documentation/              # Project documentation
-```
+**PowerShell 5.1+ (IdentityAuth.psm1):**
+- Single module file with all functions combined
+- Uses hashtables for session management
+- Compatible with Windows PowerShell 5.1+
+
+**PowerShell 7+ (IdentityAuth7.psm1):**
+- Single module file with classes and enums
+- Enhanced type safety with class-based sessions
+- Cross-platform support (Windows/Linux/macOS)
+
+**Both versions include:**
+- Module manifest (.psd1)
+- Identical functionality and API
+- Same return values and parameters
 
 ### Design Principles
 
@@ -58,75 +52,69 @@ Install-Module -Name Pester -MinimumVersion 5.0.0 -Scope CurrentUser
 Install-Module -Name PSScriptAnalyzer -Scope CurrentUser
 ```
 
-### Clone and Build
+### Clone and Setup
 
 ```powershell
-# Navigate to module directory
-Set-Location 'g:\epv-api-scripts\Identity Authentication\v2-Modernized'
+# Clone the repository
+git clone https://github.com/cyberark/epv-api-scripts.git
+cd epv-api-scripts/"Identity Authentication"/v2-Modernized
 
-# Build both versions
-.\Build\Build-Module.ps1 -Version All
-
-# Or build individual versions
-.\Build\Build-Module.ps1 -Version PS5.1
-.\Build\Build-Module.ps1 -Version PS7
-
-# Output appears in Distribution/ folder
+# For end users: Download compiled modules from releases
+# For contributors: See full source structure in repository
 ```
 
 ### Load for Development
 
 ```powershell
-# Import from Distribution folder (recommended)
-Import-Module .\Distribution\IdentityAuth.psd1 -Force      # PS5.1
-Import-Module .\Distribution\IdentityAuth7.psd1 -Force     # PS7
+# Import the module
+Import-Module .\IdentityAuth.psd1 -Force      # PS5.1
+# OR
+Import-Module .\IdentityAuth7.psd1 -Force     # PS7
 
-# Reload after changes
+# Reload after making changes to source
 Remove-Module IdentityAuth* -Force -ErrorAction SilentlyContinue
-.\Build\Build-Module.ps1 -Version All
-Import-Module .\Distribution\IdentityAuth7.psd1 -Force
+Import-Module .\IdentityAuth7.psd1 -Force
 ```
 
-## Code Structure
+## Module Functions
 
-### Private Functions (PS5.1/Private/ and PS7/Private/)
+### Public Functions (Exported)
 
-**Core Authentication:**
-- `Invoke-Rest.ps1` - Standardized REST API calls with error handling
-- `Invoke-Challenge.ps1` - Process authentication challenges (UP/OTP/Push/etc.)
-- `Invoke-OOBAUTHPIN.ps1` - Handle OOBAUTHPIN (SAML + PIN) flow
-- `Invoke-AdvancedAuthBody.ps1` - Build AdvanceAuthentication request bodies
-
-**Session Management:**
-- `New-IdentitySession.ps1` - Create session object/hashtable
-- `ConvertFrom-SessionToHeaders.ps1` - Convert session to API headers
-- `Format-Token.ps1` - Format Bearer token from various sources
-
-### Public Functions (PS5.1/Public/ and PS7/Public/)
-
-**Main Functions:**
-- `Get-IdentityHeader.ps1` - Main authentication entry point
+**Main Authentication:**
+- `Get-IdentityHeader` - Main authentication entry point
   - Parameter Sets: OAuth, UPCreds, IdentityUserName
   - Supports: OAuth, UP, MFA (OTP/Push/SMS/Email), OOBAUTHPIN
-- `Get-IdentityURL.ps1` - Auto-discover Identity URL from PCloud URL
-- `Get-IdentitySession.ps1` - Get current cached session details
-- `Clear-IdentitySession.ps1` - Clear cached session (with optional logout)
-- `Test-IdentityToken.ps1` - Validate JWT token and check expiry
+  - Returns: Hashtable with Authorization headers
 
-### PS7 Enhancements (PS7/Classes/, PS7/Enums/)
+**Helper Functions:**
+- `Get-IdentityURL` - Auto-discover Identity URL from PCloud URL
+- `Get-IdentitySession` - Get current cached session details
+- `Clear-IdentitySession` - Clear cached session (with optional logout)
+- `Test-IdentityToken` - Validate JWT token and check expiry
 
-**Classes:**
-- `IdentitySession.ps1` - Session object with methods
-- `OAuthTokenResponse.ps1` - Token response with validation
+### Internal Functions (Not Exported)
 
-**Enums:**
-- `AuthenticationMethod.ps1` - Type-safe auth methods
+The module contains private helper functions for:
+- REST API calls with error handling
+- Authentication challenge processing
+- OOBAUTHPIN flow handling
+- Session management and token formatting
+
+### PowerShell 7 Enhancements
+
+**IdentityAuth7.psm1 includes:**
+- Class-based session management (IdentitySession)
+- Type-safe enums (AuthenticationMechanism, ChallengeType, etc.)
+- Enhanced error handling with custom exceptions
+- Modern PowerShell syntax (ternary operators, null coalescing)
 
 ## Adding New Authentication Methods
 
-### Step 1: Create Private Helper
+**Note:** To contribute new authentication methods, you'll need to work with the source code in the GitHub repository. The distributed .psm1 files are compiled from individual source files.
 
-Create `PS5.1/Private/New-AuthMethod.ps1`:
+### Step 1: Create Private Helper Function
+
+In the source repository, create a new private helper function:
 
 ```powershell
 #Requires -Version 5.1
@@ -196,11 +184,13 @@ if ($PSCmdlet.ParameterSetName -eq 'NewAuth') {
 }
 ```
 
-### Step 3: Copy to PS7
+### Step 3: Update Both Versions
 
 ```powershell
-Copy-Item PS5.1\Private\New-AuthMethod.ps1 -Destination PS7\Private\
-Copy-Item PS5.1\Public\Get-IdentityHeader.ps1 -Destination PS7\Public\
+# In the source repository:
+# 1. Update PS5.1 version (traditional PowerShell)
+# 2. Update PS7 version (with classes/enums as needed)
+# 3. Rebuild modules to create new .psm1 files
 ```
 
 ### Step 4: Add Tests
@@ -276,29 +266,18 @@ Invoke-Pester -Path .\Tests\Pester\Get-IdentityHeader.Tests.ps1
 
 ## Build Process
 
-### Manual Build
+**For Contributors:**
 
-```powershell
-# PS5.1
-.\Build\Build-PS51Module.ps1
+The module is built from source files in the GitHub repository. Each version (PS5.1 and PS7) has:
+- Private helper functions
+- Public exported functions  
+- PS7 also includes classes and enums
 
-# PS7 (requires PS7+)
-pwsh .\Build\Build-PS7Module.ps1
-```
+Build scripts combine all source files into single .psm1 files for distribution.
 
-### VS Code Tasks
+**For End Users:**
 
-- `Ctrl+Shift+B` - Build PS5.1 (default)
-- `Tasks: Run Task` → `Build: All Modules`
-- `Tasks: Run Task` → `Deploy: Install to User Modules`
-
-### Build Output
-
-```
-Distribution/
-├── IdentityAuth/        # PS5.1 version
-└── IdentityAuth-PS7/    # PS7 version
-```
+No build required - download the pre-built .psm1 and .psd1 files and import directly.
 
 ## Coding Standards
 
