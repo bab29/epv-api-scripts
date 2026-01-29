@@ -1,7 +1,7 @@
 # Identity Authentication Module v2 - Modernized
 
-**Status:** 📋 Planning & Design Phase  
-**Target Release:** TBD  
+**Status:** 📋 Planning & Design Phase
+**Target Release:** TBD
 **PowerShell Compatibility:** 5.1+ (IdentityAuth.psm1) and 7.0+ (IdentityAuth7.psm1)
 
 ---
@@ -12,13 +12,13 @@ This is a **complete rewrite** of the Identity Authentication module with modern
 
 ### Key Improvements Over v1
 
-✅ **OOBAUTHPIN Flow** - Modern SAML replacement with PIN-based authentication  
-✅ **Automatic OAuth Token Refresh** - No manual re-authentication needed  
-✅ **Zero PSScriptAnalyzer Violations** - Strict code quality standards  
-✅ **Dual PowerShell Versions** - PS5.1 baseline + PS7 with classes/enums/modern features  
-✅ **No Write-Host** - Proper output streams (Write-Output, Write-Verbose, Write-Warning)  
-✅ **Session State Management** - `$script:CurrentSession` with automatic expiry detection  
-✅ **Comprehensive Logging** - Transcript support with sensitive data masking  
+✅ **OOBAUTHPIN Flow** - Modern SAML replacement with PIN-based authentication
+✅ **Automatic OAuth Token Refresh** - No manual re-authentication needed
+✅ **Zero PSScriptAnalyzer Violations** - Strict code quality standards
+✅ **Dual PowerShell Versions** - PS5.1 baseline + PS7 with classes/enums/modern features
+✅ **No Write-Host** - Proper output streams (Write-Output, Write-Verbose, Write-Warning)
+✅ **Session State Management** - `$script:CurrentSession` with automatic expiry detection
+✅ **Comprehensive Logging** - Transcript support with sensitive data masking
 ✅ **Standardized Return Value** - Returns hashtable with Authorization and X-IDAP-NATIVE-CLIENT headers
 
 ---
@@ -229,7 +229,7 @@ $accounts = Invoke-RestMethod -Uri "https://tenant.privilegecloud.cyberark.cloud
 ## Key Design Decisions
 
 ### Return Value: Hashtable with Headers
-**Decision:** Return hashtable with Authorization and X-IDAP-NATIVE-CLIENT keys  
+**Decision:** Return hashtable with Authorization and X-IDAP-NATIVE-CLIENT keys
 **Rationale:**
 - Matches current IdentityAuth.psm1 exactly: `@{Authorization = "Bearer token"; 'X-IDAP-NATIVE-CLIENT' = 'true'}`
 - Direct usage: `Invoke-RestMethod -Uri $url -Headers $headers`
@@ -237,7 +237,7 @@ $accounts = Invoke-RestMethod -Uri "https://tenant.privilegecloud.cyberark.cloud
 - Eliminates need to manually construct headers
 
 ### Dual Module Approach
-**Decision:** Separate modules for PS5.1 and PS7+  
+**Decision:** Separate modules for PS5.1 and PS7+
 **Rationale:**
 - PS7 module uses classes, enums, ternary operators, null-coalescing
 - PS5.1 module uses hashtables and traditional logic
@@ -245,7 +245,7 @@ $accounts = Invoke-RestMethod -Uri "https://tenant.privilegecloud.cyberark.cloud
 - Users choose based on their environment
 
 ### Session State Management
-**Decision:** `$script:CurrentSession` with automatic OAuth refresh  
+**Decision:** `$script:CurrentSession` with automatic OAuth refresh
 **Rationale:**
 - OAuth can auto-refresh (stored credentials)
 - MFA requires manual re-authentication (security)
@@ -253,7 +253,7 @@ $accounts = Invoke-RestMethod -Uri "https://tenant.privilegecloud.cyberark.cloud
 - Expiry detection with 60-second warning
 
 ### No Write-Host
-**Decision:** Zero Write-Host calls, use proper streams  
+**Decision:** Zero Write-Host calls, use proper streams
 **Rationale:**
 - PSScriptAnalyzer compliance
 - PowerShell best practices
@@ -315,22 +315,22 @@ This module is currently in the planning phase. Once implementation begins:
 
 ## FAQ
 
-**Q: When will this be ready?**  
+**Q: When will this be ready?**
 A: Estimated 5-7 weeks for full implementation (9 steps)
 
-**Q: Can I use this now?**  
+**Q: Can I use this now?**
 A: No, still in planning phase. Use the current IdentityAuth.psm1 (v1) for production.
 
-**Q: Will this break existing scripts?**  
+**Q: Will this break existing scripts?**
 A: Return value changes from hashtable to string. Migration path documented in implementation plan.
 
-**Q: Why two modules (PS5.1 and PS7)?**  
+**Q: Why two modules (PS5.1 and PS7)?**
 A: Maximum compatibility (PS5.1) + maximum modern features (PS7 classes/enums). Choose based on your environment.
 
-**Q: What about on-premises PVWA?**  
+**Q: What about on-premises PVWA?**
 A: This module is for **Privilege Cloud only** (Identity authentication). On-prem uses CyberArk Authentication, not Identity.
 
-**Q: Why remove psPAS support?**  
+**Q: Why remove psPAS support?**
 A: Simplifies the module. Direct API calls or psPAS module can still be used, just needs manual header construction: `@{Authorization = $token}`.
 
 ---
@@ -341,5 +341,5 @@ Questions or feedback during implementation? Open an issue in the epv-api-script
 
 ---
 
-**Last Updated:** 2026-01-28  
+**Last Updated:** 2026-01-28
 **Version:** 2.0.0-planning

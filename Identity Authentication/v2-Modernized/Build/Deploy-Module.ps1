@@ -13,10 +13,10 @@ param(
     [Parameter()]
     [ValidateSet('User', 'System', 'Both')]
     [string]$Scope = 'User',
-    
+
     [Parameter()]
     [switch]$Force,
-    
+
     [Parameter()]
     [switch]$RemoveExisting
 )
@@ -60,10 +60,10 @@ function Deploy-Module {
         [string]$DestinationPath,
         [string]$ScopeName
     )
-    
+
     Write-Host "Deploying to $ScopeName scope..."
     Write-Host "  Destination: $DestinationPath"
-    
+
     # Remove existing if requested
     if ($RemoveExisting -and (Test-Path $DestinationPath)) {
         if ($PSCmdlet.ShouldProcess($DestinationPath, "Remove existing module")) {
@@ -71,19 +71,19 @@ function Deploy-Module {
             Remove-Item $DestinationPath -Recurse -Force
         }
     }
-    
+
     # Check for existing module
     if ((Test-Path $DestinationPath) -and -not $Force) {
         Write-Warning "Module already exists at: $DestinationPath"
         Write-Warning "Use -Force to overwrite or -RemoveExisting to remove first"
         return $false
     }
-    
+
     # Copy module
     if ($PSCmdlet.ShouldProcess($DestinationPath, "Deploy module")) {
         Write-Host "  Copying module files..."
         Copy-Item -Path $DistPath -Destination $DestinationPath -Recurse -Force
-        
+
         # Verify installation
         if (Test-Path $DestinationPath) {
             $manifest = Join-Path $DestinationPath 'IdentityAuth.psd1'
@@ -100,7 +100,7 @@ function Deploy-Module {
             return $false
         }
     }
-    
+
     return $false
 }
 
@@ -125,11 +125,11 @@ if ($deployed.Count -gt 0) {
 
 Testing module import...
 "@
-    
+
     try {
         Import-Module IdentityAuth -Force -ErrorAction Stop
         $module = Get-Module IdentityAuth
-        
+
         Write-Host @"
 
 Module loaded successfully!
@@ -139,7 +139,7 @@ Module loaded successfully!
   Exported Commands: $($module.ExportedCommands.Count)
 
 "@ -ForegroundColor Green
-        
+
     } catch {
         Write-Warning "Module deployed but failed to import: $_"
     }

@@ -15,7 +15,7 @@ class IdentitySession {
     [string]$Username
     [AuthenticationMethod]$AuthMethod
     [hashtable]$Headers
-    
+
     IdentitySession([string]$sessionId, [string]$token, [datetime]$expiry, [string]$username, [AuthenticationMethod]$method) {
         $this.SessionId = $sessionId
         $this.AccessToken = $token
@@ -27,17 +27,17 @@ class IdentitySession {
             'X-IDAP-NATIVE-CLIENT' = 'true'
         }
     }
-    
+
     [bool] IsExpired() {
         return $this.IsExpired(300)  # 5-minute buffer
     }
-    
+
     [bool] IsExpired([int]$bufferSeconds) {
         $now = [datetime]::Now
         $expiryWithBuffer = $this.ExpiresAt.AddSeconds(-$bufferSeconds)
         return $now -ge $expiryWithBuffer
     }
-    
+
     [hashtable] GetHeaders() {
         if ($this.IsExpired()) {
             throw "Session token has expired"

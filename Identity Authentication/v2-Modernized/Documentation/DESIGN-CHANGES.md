@@ -1,6 +1,6 @@
 # Design Changes Based on Feedback
 
-**Date:** 2026-01-28  
+**Date:** 2026-01-28
 **Feedback Session:** User requirements clarification
 
 ---
@@ -51,17 +51,17 @@ $token = Get-IdentityHeader -OAuthCreds $creds -PCloudURL "https://tenant.cybera
 1. **OOBAUTHPIN Authentication Flow** (42 nodes)
    - Shows URL display, PIN collection, SAML completion, challenges
    - Decision points for IdpRedirectShortUrl detection
-   
+
 2. **OAuth Authentication Flow** (38 nodes)
    - Auto-refresh logic with stored credentials
    - Token expiry calculation
    - Multiple credential format support
-   
+
 3. **Standard Challenge Flow** (47 nodes)
    - UP/OTP/Push mechanisms
    - Multi-mechanism selection
    - Poll loop for push notifications
-   
+
 4. **Token Refresh Logic Flow** (32 nodes)
    - ForceNewSession handling
    - Expiry detection (60-second warning)
@@ -71,10 +71,10 @@ $token = Get-IdentityHeader -OAuthCreds $creds -PCloudURL "https://tenant.cybera
 5. **Core Classes and Relationships**
    - IdentitySession, IdentityAuthResponse, ChallengeInfo, MechanismInfo
    - SessionManager, TokenValidator
-   
+
 6. **Enum Definitions**
    - AuthenticationMechanism, ChallengeType, MechanismType, SessionState
-   
+
 7. **Private Function Organization**
    - FormatToken, InvokeRest, InvokeAdvancedAuthBody, InvokeChallenge, SessionHelpers
 
@@ -122,7 +122,7 @@ Identity Authentication/
 - FAQ section addresses on-prem question
 
 **Key Note in README.md:**
-> **Q: What about on-premises PVWA?**  
+> **Q: What about on-premises PVWA?**
 > A: This module is for **Privilege Cloud only** (Identity authentication). On-prem uses CyberArk Authentication, not Identity.
 
 ---
@@ -208,11 +208,11 @@ Invoke-RestMethod -Uri "$pvwaUrl/PasswordVault/API/Accounts" -Headers $headers
 
 All design changes incorporated. Ready to proceed with implementation!
 
-**Start with:** Step 1 - Create Dual Module Structure  
+**Start with:** Step 1 - Create Dual Module Structure
 **Reference:** [IMPLEMENTATION-PLAN.md](IMPLEMENTATION-PLAN.md)
 
 ---
 
-**Changes finalized:** 2026-01-28  
-**Documentation updated:** All 4 files  
+**Changes finalized:** 2026-01-28
+**Documentation updated:** All 4 files
 **Status:** ✅ Design locked, ready for implementation

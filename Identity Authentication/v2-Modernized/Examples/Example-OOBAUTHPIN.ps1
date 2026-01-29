@@ -42,7 +42,7 @@ A PIN will be sent to your registered device/email.
 try {
     # Authenticate (user will be prompted for PIN)
     $headers = Get-IdentityHeader -Username $username -PCloudURL $pcloudUrl -Verbose
-    
+
     Write-Host @"
 
 SUCCESS! Authentication complete.
@@ -53,15 +53,15 @@ Headers received:
 
 Example API Call:
 "@
-    
+
     # Example: Get safes
     $pvwaUrl = $pcloudUrl -replace '\.cyberark\.cloud.*', '.privilegecloud.cyberark.cloud/PasswordVault'
     $safesUrl = "$pvwaUrl/API/Safes?limit=5"
-    
+
     Write-Host "  Calling: $safesUrl"
-    
+
     $response = Invoke-RestMethod -Uri $safesUrl -Headers $headers -Method Get
-    
+
     Write-Host @"
 
 API call successful!
@@ -69,11 +69,11 @@ Retrieved $($response.Safes.Count) safes.
 
 Safes:
 "@
-    
+
     $response.Safes | ForEach-Object {
         Write-Host "  - $($_.SafeName)"
     }
-    
+
     Write-Host @"
 
 ================================================================================
@@ -81,7 +81,7 @@ OOBAUTHPIN authentication demonstration complete!
 ================================================================================
 
 "@
-    
+
 } catch {
     Write-Host @"
 

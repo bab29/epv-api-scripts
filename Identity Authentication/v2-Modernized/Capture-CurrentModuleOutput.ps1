@@ -8,7 +8,7 @@
     - Output format
     - Session data
     - API responses
-    
+
     This baseline is used to ensure the v2 module maintains compatibility.
 
 .PARAMETER TestType
@@ -20,12 +20,12 @@
 
 .EXAMPLE
     .\Capture-CurrentModuleOutput.ps1 -TestType OAuth
-    
+
     Captures OAuth authentication flow from current module.
 
 .EXAMPLE
     .\Capture-CurrentModuleOutput.ps1 -TestType All -OutputPath "C:\Baselines"
-    
+
     Captures all authentication flows and saves to specified path.
 
 .NOTES
@@ -81,11 +81,11 @@ function Save-BaselineOutput {
         [object]$Result,
         [string]$Description
     )
-    
+
     $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
     $filename = "baseline_${Name}_${timestamp}.json"
     $filepath = Join-Path -Path $OutputPath -ChildPath $filename
-    
+
     $baselineData = @{
         TestType = $Name
         Description = $Description
@@ -95,10 +95,10 @@ function Save-BaselineOutput {
         ResultType = $Result.GetType().FullName
         ResultProperties = $Result.PSObject.Properties.Name
     }
-    
+
     $baselineData | ConvertTo-Json -Depth 10 | Set-Content -Path $filepath -Encoding UTF8
     Write-Output "Baseline saved: $filename"
-    
+
     return $filepath
 }
 
@@ -106,31 +106,31 @@ function Save-BaselineOutput {
 function Test-OAuth {
     Write-Output "Testing OAuth Authentication Flow"
     Write-Output "-"*80
-    
+
     $pcloudUrl = Read-Host "Enter PCloud URL (e.g., https://tenant.cyberark.cloud)"
     $creds = Get-Credential -Message "OAuth Credentials (ClientID as Username, ClientSecret as Password)"
-    
+
     Write-Output "Calling Get-IdentityHeader with OAuth credentials..."
     $startTime = Get-Date
-    
+
     try {
         $result = Get-IdentityHeader -OAuthCreds $creds -PCloudURL $pcloudUrl
         $endTime = Get-Date
         $duration = ($endTime - $startTime).TotalSeconds
-        
+
         Write-Output "SUCCESS - Duration: $duration seconds"
         Write-Output ""
         Write-Output "Result Type: $($result.GetType().FullName)"
         Write-Output "Result Value:"
         $result | Format-List | Out-String | Write-Output
-        
+
         # Save baseline
         $filepath = Save-BaselineOutput -Name 'OAuth' -Result $result -Description 'OAuth Client Credentials authentication'
-        
+
         Write-Output ""
         Write-Output "Baseline captured successfully!"
         return $filepath
-        
+
     } catch {
         Write-Error "OAuth test failed: $($_.Exception.Message)"
         return $null
@@ -140,32 +140,32 @@ function Test-OAuth {
 function Test-UP {
     Write-Output "Testing Username/Password Authentication Flow"
     Write-Output "-"*80
-    
+
     $identityUrl = Read-Host "Enter Identity URL (e.g., https://tenant.id.cyberark.cloud)"
     $username = Read-Host "Enter username"
     $creds = Get-Credential -Message "Enter password for $username"
-    
+
     Write-Output "Calling Get-IdentityHeader with UP credentials..."
     $startTime = Get-Date
-    
+
     try {
         $result = Get-IdentityHeader -UPCreds $creds -IdentityTenantURL $identityUrl
         $endTime = Get-Date
         $duration = ($endTime - $startTime).TotalSeconds
-        
+
         Write-Output "SUCCESS - Duration: $duration seconds"
         Write-Output ""
         Write-Output "Result Type: $($result.GetType().FullName)"
         Write-Output "Result Value:"
         $result | Format-List | Out-String | Write-Output
-        
+
         # Save baseline
         $filepath = Save-BaselineOutput -Name 'UP' -Result $result -Description 'Username/Password authentication'
-        
+
         Write-Output ""
         Write-Output "Baseline captured successfully!"
         return $filepath
-        
+
     } catch {
         Write-Error "UP test failed: $($_.Exception.Message)"
         return $null
@@ -175,31 +175,31 @@ function Test-UP {
 function Test-MFA {
     Write-Output "Testing MFA (Push/OTP) Authentication Flow"
     Write-Output "-"*80
-    
+
     $identityUrl = Read-Host "Enter Identity URL (e.g., https://tenant.id.cyberark.cloud)"
     $username = Read-Host "Enter username (will trigger MFA)"
-    
+
     Write-Output "Calling Get-IdentityHeader (will prompt for MFA)..."
     $startTime = Get-Date
-    
+
     try {
         $result = Get-IdentityHeader -IdentityUserName $username -IdentityTenantURL $identityUrl
         $endTime = Get-Date
         $duration = ($endTime - $startTime).TotalSeconds
-        
+
         Write-Output "SUCCESS - Duration: $duration seconds"
         Write-Output ""
         Write-Output "Result Type: $($result.GetType().FullName)"
         Write-Output "Result Value:"
         $result | Format-List | Out-String | Write-Output
-        
+
         # Save baseline
         $filepath = Save-BaselineOutput -Name 'MFA' -Result $result -Description 'MFA (Push/OTP) authentication'
-        
+
         Write-Output ""
         Write-Output "Baseline captured successfully!"
         return $filepath
-        
+
     } catch {
         Write-Error "MFA test failed: $($_.Exception.Message)"
         return $null
@@ -211,31 +211,31 @@ function Test-OOBAUTHPIN {
     Write-Output "-"*80
     Write-Output "NOTE: Current module may use deprecated SAML. This captures existing behavior."
     Write-Output ""
-    
+
     $pcloudUrl = Read-Host "Enter PCloud URL (e.g., https://tenant.cyberark.cloud)"
     $username = Read-Host "Enter username"
-    
+
     Write-Output "Calling Get-IdentityHeader (will display SAML URL or prompt)..."
     $startTime = Get-Date
-    
+
     try {
         $result = Get-IdentityHeader -IdentityUserName $username -PCloudURL $pcloudUrl
         $endTime = Get-Date
         $duration = ($endTime - $startTime).TotalSeconds
-        
+
         Write-Output "SUCCESS - Duration: $duration seconds"
         Write-Output ""
         Write-Output "Result Type: $($result.GetType().FullName)"
         Write-Output "Result Value:"
         $result | Format-List | Out-String | Write-Output
-        
+
         # Save baseline
         $filepath = Save-BaselineOutput -Name 'OOBAUTHPIN' -Result $result -Description 'OOBAUTHPIN/SAML authentication'
-        
+
         Write-Output ""
         Write-Output "Baseline captured successfully!"
         return $filepath
-        
+
     } catch {
         Write-Error "OOBAUTHPIN test failed: $($_.Exception.Message)"
         return $null
@@ -252,7 +252,7 @@ if ($TestType -eq 'All') {
     Write-Output "Capturing ALL authentication flows"
     Write-Output "You will be prompted for credentials for each flow"
     Write-Output ""
-    
+
     $flows = @('OAuth', 'UP', 'MFA', 'OOBAUTHPIN')
     foreach ($flow in $flows) {
         Write-Output ""

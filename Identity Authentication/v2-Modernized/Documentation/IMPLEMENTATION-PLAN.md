@@ -128,20 +128,20 @@ Create a comprehensive PowerShell module for authenticating to CyberArk Identity
    - Output formatted instructions using here-string:
      ```powershell
      $instructions = @"
-     
+
      ============================================================
      OOBAUTHPIN Authentication Required
      ============================================================
-     
+
      Step 1: Open your web browser
      Step 2: Navigate to the following URL:
-     
+
          $IdpRedirectShortUrl
-     
+
      Step 3: Complete SAML authentication with your Identity Provider
      Step 4: You will receive a PIN code after successful authentication
      Step 5: Enter the PIN code when prompted below
-     
+
      ============================================================
      "@
      Write-Output $instructions
@@ -173,7 +173,7 @@ Create a comprehensive PowerShell module for authenticating to CyberArk Identity
          Action = 'Answer'
          Answer = $PIN
      } | ConvertTo-Json -Depth 9
-     
+
      $advanceParams = @{
          Uri = $startPlatformAPIAdvancedAuth
          Method = 'Post'
@@ -231,7 +231,7 @@ Create a comprehensive PowerShell module for authenticating to CyberArk Identity
      - `OAuthCreds`: PSCredential (Username=ClientID, Password=ClientSecret) - PRIMARY
      - `OAuthPlainText`: `-ClientId [string]` + `-ClientSecret [string]`
      - `OAuthSecureString`: `-ClientId [string]` + `-ClientSecret [securestring]`
-   
+
 2. **Implement Credential Extraction Logic**
    ```powershell
    # Extract based on parameter set
@@ -255,7 +255,7 @@ Create a comprehensive PowerShell module for authenticating to CyberArk Identity
 3. **Implement OAuth Token Request with Splatting**
    ```powershell
    $body = "grant_type=client_credentials&client_id=$ClientId&client_secret=$ClientSecret"
-   
+
    $oauthParams = @{
        Uri = "$IdaptiveBasePlatformURL/OAuth2/Token/$ClientId"
        Method = 'Post'
@@ -263,7 +263,7 @@ Create a comprehensive PowerShell module for authenticating to CyberArk Identity
        Body = $body
        ErrorAction = 'Stop'
    }
-   
+
    try {
        $response = Invoke-RestMethod @oauthParams
    } catch {
@@ -287,7 +287,7 @@ Create a comprehensive PowerShell module for authenticating to CyberArk Identity
 4. **Calculate and Store Token Expiry**
    ```powershell
    $tokenExpiry = (Get-Date).AddSeconds($response.expires_in)
-   
+
    # PS7 version - create IdentitySession object
    $script:CurrentSession = [IdentitySession]@{
        Token = $response.access_token
@@ -302,7 +302,7 @@ Create a comprehensive PowerShell module for authenticating to CyberArk Identity
            RefreshCount = 0
        }
    }
-   
+
    # PS5.1 version - create hashtable
    $script:CurrentSession = @{
        Token = $response.access_token
@@ -378,7 +378,7 @@ Create a comprehensive PowerShell module for authenticating to CyberArk Identity
            [switch]$EnableTranscript,
            [string]$TranscriptPath = "$PWD\IdentityAuth_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
        )
-       
+
        begin {
            if ($EnableTranscript) {
                try {
@@ -389,7 +389,7 @@ Create a comprehensive PowerShell module for authenticating to CyberArk Identity
                }
            }
        }
-       
+
        process {
            try {
                # Main authentication logic
@@ -400,7 +400,7 @@ Create a comprehensive PowerShell module for authenticating to CyberArk Identity
                throw
            }
        }
-       
+
        end {
            if ($EnableTranscript) {
                try {
@@ -439,7 +439,7 @@ Create a comprehensive PowerShell module for authenticating to CyberArk Identity
        ErrorAction = 'Continue'
    }
    Write-Output @outputParams
-   
+
    # BAD - No backticks allowed
    Write-Output `
        -InputObject $message `
@@ -471,46 +471,46 @@ Create a comprehensive PowerShell module for authenticating to CyberArk Identity
            [Parameter(ParameterSetName = 'IdentityUserName', Mandatory)]
            [ValidateNotNullOrEmpty()]
            [string]$IdentityUserName,
-           
+
            [Parameter(ParameterSetName = 'UPCreds', Mandatory)]
            [ValidateNotNullOrEmpty()]
            [pscredential]$UPCreds,
-           
+
            [Parameter(ParameterSetName = 'OAuthCreds', Mandatory)]
            [ValidateNotNullOrEmpty()]
            [pscredential]$OAuthCreds,
-           
+
            [Parameter(ParameterSetName = 'OAuthPlainText', Mandatory)]
            [ValidateNotNullOrEmpty()]
            [string]$ClientId,
-           
+
            [Parameter(ParameterSetName = 'OAuthPlainText', Mandatory)]
            [ValidateNotNullOrEmpty()]
            [string]$ClientSecret,
-           
+
            [Parameter(Mandatory = $false)]
            [ValidatePattern('^\d+$')]
            [string]$PIN,
-           
+
            # Optional switches (SECOND)
            [Parameter(Mandatory = $false)]
            [switch]$EnableTranscript,
-           
+
            [Parameter(Mandatory = $false)]
            [switch]$ForceNewSession,
-           
+
            # Session/Config parameters (LAST)
            [Parameter(Mandatory = $false)]
            [ValidateNotNullOrEmpty()]
            [string]$IdentityTenantURL,
-           
+
            [Parameter(Mandatory = $false)]
            [ValidateNotNullOrEmpty()]
            [string]$PCloudURL,
-           
+
            [Parameter(Mandatory = $false)]
            [string]$PCloudSubdomain,
-           
+
            [Parameter(Mandatory = $false)]
            [ValidateScript({
                $parentPath = Split-Path -Parent $_
@@ -538,13 +538,13 @@ Create a comprehensive PowerShell module for authenticating to CyberArk Identity
        if ($_.Exception.Response) {
            $statusCode = $_.Exception.Response.StatusCode.value__
        }
-       
+
        $errorMessage = "API call failed"
        if ($statusCode) {
            $errorMessage += " (HTTP $statusCode)"
        }
        $errorMessage += ": $($_.Exception.Message)"
-       
+
        $errorRecord = [System.Management.Automation.ErrorRecord]::new(
            $_.Exception,
            'IdentityAPICallFailed',
@@ -566,80 +566,80 @@ Create a comprehensive PowerShell module for authenticating to CyberArk Identity
    <#
    .SYNOPSIS
        Authenticates to CyberArk Identity and returns authorization headers.
-   
+
    .DESCRIPTION
        The Get-IdentityHeader function authenticates to CyberArk Identity Security Platform Shared Services using various authentication methods including Username/Password, OAuth, MFA challenges, and OOBAUTHPIN (SAML). It returns authorization headers that can be used for subsequent API calls.
-       
+
        The function supports automatic token refresh for OAuth authentication when credentials are stored in the session. For MFA-based authentication, manual re-authentication is required when tokens expire.
-   
+
    .PARAMETER IdentityUserName
        The username to authenticate with. Used for interactive authentication with MFA challenges.
-   
+
    .PARAMETER UPCreds
        PSCredential object containing username and password for non-interactive authentication.
-   
+
    .PARAMETER OAuthCreds
        PSCredential object containing OAuth ClientID (username) and ClientSecret (password) for OAuth authentication.
-   
+
    .PARAMETER ClientId
        OAuth Client ID as plain text string. Use with ClientSecret parameter.
-   
+
    .PARAMETER ClientSecret
        OAuth Client Secret as plain text string. Use with ClientId parameter.
-   
+
    .PARAMETER PIN
        PIN code for OOBAUTHPIN authentication. If not provided, user will be prompted after SAML authentication.
-   
+
    .PARAMETER EnableTranscript
        Switch to enable PowerShell transcript logging of the authentication session.
-   
+
    .PARAMETER ForceNewSession
        Switch to force new authentication even if valid session exists.
-   
+
    .PARAMETER IdentityTenantURL
        Direct URL to Identity tenant (e.g., https://tenant.id.cyberark.cloud).
-   
+
    .PARAMETER PCloudURL
        Privilege Cloud URL. Identity URL will be auto-discovered from this.
-   
+
    .PARAMETER PCloudSubdomain
        Privilege Cloud subdomain. Used for constructing URLs.
-   
+
    .PARAMETER TranscriptPath
        Path for transcript log file. Defaults to current directory with timestamp.
-   
+
    .OUTPUTS
        System.String
        Returns the Bearer token string (e.g., 'eyJ0eXAiOiJKV1QiLC...'). For PCloud API calls, use as: -logonToken $token
-   
+
    .EXAMPLE
        $token = Get-IdentityHeader -OAuthCreds $creds -PCloudURL "https://tenant.cyberark.cloud"
-       
+
        Authenticates using OAuth credentials and returns the Bearer token string.
-   
+
    .EXAMPLE
        $token = Get-IdentityHeader -IdentityUserName "admin@company.com" -IdentityTenantURL "https://tenant.id.cyberark.cloud" -Verbose
        .\Accounts_Onboard_Utility.ps1 -PVWAURL "https://tenant.privilegecloud.cyberark.cloud" -logonToken $token
-       
+
        Authenticates interactively with verbose output, then uses token with onboarding utility.
-   
+
    .EXAMPLE
        $token = Get-IdentityHeader -OAuthCreds $creds -PCloudURL "https://tenant.cyberark.cloud"
        Invoke-RestMethod -Uri "$pvwaUrl/PasswordVault/API/Accounts" -Method Get -Headers @{Authorization = $token}
-       
+
        Authenticates with OAuth and uses token for direct REST API call.
-   
+
    .NOTES
        Version:        2.0.0
        Author:         CyberArk
        Creation Date:  2026-01-28
        Purpose/Change: Complete rewrite with OOBAUTHPIN support, PS7 classes, and modern PowerShell standards
-       
+
        Requires:       PowerShell 5.1 (IdentityAuth.psm1) or PowerShell 7.0+ (IdentityAuth7.psm1)
-       
+
    .LINK
        https://docs.cyberark.com/identity-administration/latest/en/content/developer/authentication/adaptive-mfa-overview.htm
-   
+
    .LINK
        https://api-docs.cyberark.com/create-api-token/docs/create-api-token
    #>
@@ -678,10 +678,10 @@ Create a comprehensive PowerShell module for authenticating to CyberArk Identity
    # At start of Get-IdentityHeader
    if (-not $ForceNewSession -and $script:CurrentSession) {
        Write-Verbose "Checking existing session"
-       
+
        $isExpired = (Get-Date) -gt $script:CurrentSession.TokenExpiry
        $isExpiringSoon = $script:CurrentSession.TokenExpiry -lt (Get-Date).AddSeconds(60)
-       
+
        if ($isExpired) {
            Write-Verbose "Token expired, attempting refresh"
            # Attempt refresh
@@ -701,11 +701,11 @@ Create a comprehensive PowerShell module for authenticating to CyberArk Identity
        if ($this.AuthMethod -eq [AuthenticationMechanism]::OAuth) {
            if ($this.StoredCredentials) {
                Write-Verbose "Auto-refreshing OAuth token"
-               
+
                $ClientId = $this.StoredCredentials.UserName
                $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($this.StoredCredentials.Password)
                $ClientSecret = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
-               
+
                try {
                    $body = "grant_type=client_credentials&client_id=$ClientId&client_secret=$ClientSecret"
                    $oauthParams = @{
@@ -716,12 +716,12 @@ Create a comprehensive PowerShell module for authenticating to CyberArk Identity
                        ErrorAction = 'Stop'
                    }
                    $response = Invoke-RestMethod @oauthParams
-                   
+
                    $this.Token = $response.access_token
                    $this.TokenExpiry = (Get-Date).AddSeconds($response.expires_in)
                    $this.Metadata.LastRefreshed = Get-Date
                    $this.Metadata.RefreshCount++
-                   
+
                    Write-Verbose "OAuth token refreshed successfully"
                } catch {
                    throw "Failed to refresh OAuth token: $($_.Exception.Message)"
@@ -738,11 +738,11 @@ Create a comprehensive PowerShell module for authenticating to CyberArk Identity
            throw "Cannot auto-refresh: AuthMethod $($this.AuthMethod) requires user interaction"
        }
    }
-   
+
    # PS5.1 version with function
    function Update-IdentitySession {
        param([hashtable]$Session)
-       
+
        if ($Session.AuthMethod -eq 'OAuth') {
            if ($Session.StoredCredentials) {
                Write-Verbose "Auto-refreshing OAuth token"
@@ -783,7 +783,7 @@ Create a comprehensive PowerShell module for authenticating to CyberArk Identity
        param(
            [switch]$NoLogout
        )
-       
+
        if ($script:CurrentSession) {
            if (-not $NoLogout) {
                try {
@@ -804,7 +804,7 @@ Create a comprehensive PowerShell module for authenticating to CyberArk Identity
                    Write-Verbose "Logout call failed: $($_.Exception.Message)"
                }
            }
-           
+
            # Clear session
            $script:CurrentSession = $null
            Write-Verbose "Session cleared"
@@ -827,7 +827,7 @@ Create a comprehensive PowerShell module for authenticating to CyberArk Identity
        #>
        [CmdletBinding()]
        param()
-       
+
        if ($script:CurrentSession) {
            return $script:CurrentSession
        } else {
@@ -971,26 +971,26 @@ Create a comprehensive PowerShell module for authenticating to CyberArk Identity
        [ValidateSet('5.1', '7')]
        [string]$PSVersion = '7'
    )
-   
+
    $modulePath = if ($PSVersion -eq '7') {
        "$PSScriptRoot\IdentityAuth7.psm1"
    } else {
        "$PSScriptRoot\IdentityAuth.psm1"
    }
-   
+
    Import-Module $modulePath -Force
-   
+
    function Show-Menu {
        Clear-Host
        Write-Output @"
-   
+
    ============================================================
    Identity Authentication Module - Manual Testing
    ============================================================
    PowerShell Version: $($PSVersionTable.PSVersion)
    Module: $modulePath
    ============================================================
-   
+
    1. Test OOBAUTHPIN Authentication
    2. Test OAuth Authentication
    3. Test Standard Challenges (UP/OTP/Push)
@@ -1000,22 +1000,22 @@ Create a comprehensive PowerShell module for authenticating to CyberArk Identity
    7. View Current Session
    8. Clear Session
    9. Exit
-   
+
    ============================================================
    "@
        Write-Host "Select option (1-9): " -NoNewline -ForegroundColor Yellow
    }
-   
+
    do {
        Show-Menu
        $choice = Read-Host
-       
+
        switch ($choice) {
            '1' {
                # Test OOBAUTHPIN
                $username = Read-Host "Enter username"
                $pcloudUrl = Read-Host "Enter PCloud URL (e.g., https://tenant.cyberark.cloud)"
-               
+
                Write-Output "`nTesting OOBAUTHPIN flow...`n"
                $headers = Get-IdentityHeader -IdentityUserName $username -PCloudURL $pcloudUrl -Verbose
                Write-Output "`nResult:"
@@ -1026,7 +1026,7 @@ Create a comprehensive PowerShell module for authenticating to CyberArk Identity
                # Test OAuth
                $pcloudUrl = Read-Host "Enter PCloud URL"
                $creds = Get-Credential -Message "OAuth Credentials (ClientID as Username, ClientSecret as Password)"
-               
+
                Write-Output "`nTesting OAuth flow...`n"
                $headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL $pcloudUrl -Verbose
                Write-Output "`nResult:"
@@ -1037,7 +1037,7 @@ Create a comprehensive PowerShell module for authenticating to CyberArk Identity
                # Test Standard Challenges
                $username = Read-Host "Enter username"
                $identityUrl = Read-Host "Enter Identity URL (e.g., https://tenant.id.cyberark.cloud)"
-               
+
                Write-Output "`nTesting standard challenge flow...`n"
                $headers = Get-IdentityHeader -IdentityUserName $username -IdentityTenantURL $identityUrl -Verbose
                Write-Output "`nResult:"
@@ -1068,14 +1068,14 @@ Create a comprehensive PowerShell module for authenticating to CyberArk Identity
                $session = Get-IdentitySession
                if ($session) {
                    $headers = Get-IdentityHeader
-                   
+
                    Write-Output "Checking required keys..."
                    $hasAuth = $headers.ContainsKey('Authorization')
                    $hasNative = $headers.ContainsKey('X-IDAP-NATIVE-CLIENT')
-                   
+
                    Write-Output "Authorization: $hasAuth"
                    Write-Output "X-IDAP-NATIVE-CLIENT: $hasNative"
-                   
+
                    if ($hasAuth -and $hasNative) {
                        Write-Output "`nValidation PASSED" -ForegroundColor Green
                    } else {
@@ -1140,14 +1140,14 @@ Create a comprehensive PowerShell module for authenticating to CyberArk Identity
        [Parameter(Mandatory)]
        [string]$TestType  # 'OAuth', 'UP', 'MFA', 'SAML'
    )
-   
+
    # Import current module
    Import-Module "$PSScriptRoot\IdentityAuth.psm1" -Force
-   
+
    Write-Output "Testing $TestType authentication flow..."
    Write-Output "This will capture the CURRENT module output for comparison"
    Write-Output ""
-   
+
    switch ($TestType) {
        'OAuth' {
            $creds = Get-Credential -Message "OAuth Credentials"
@@ -1156,7 +1156,7 @@ Create a comprehensive PowerShell module for authenticating to CyberArk Identity
        }
        # Add other types as needed
    }
-   
+
    # Serialize and save
    $outputPath = "$PSScriptRoot\baseline_$TestType.json"
    $result | ConvertTo-Json -Depth 10 | Set-Content $outputPath -Encoding UTF8

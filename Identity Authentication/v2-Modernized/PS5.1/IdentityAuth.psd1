@@ -9,19 +9,19 @@
     Copyright = '(c) 2026 CyberArk Software Ltd. All rights reserved.'
     Description = 'CyberArk Identity Authentication Module for Privilege Cloud (PowerShell 5.1)'
     PowerShellVersion = '5.1'
-    
+
     # Functions to export
-    FunctionsToExport = @('Get-IdentityHeader')
-    
+    FunctionsToExport = @('Get-IdentityHeader', 'Set-IdentityLogFile', 'Disable-IdentityLogFile')
+
     # Cmdlets to export
     CmdletsToExport = @()
-    
+
     # Variables to export
     VariablesToExport = @()
-    
+
     # Aliases to export
     AliasesToExport = @()
-    
+
     # Private data
     PrivateData = @{
         PSData = @{

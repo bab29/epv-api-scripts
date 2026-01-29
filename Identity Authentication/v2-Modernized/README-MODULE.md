@@ -315,7 +315,7 @@ See [CONTRIBUTING.md](../../CONTRIBUTING.md) for contribution guidelines.
 
 ---
 
-**Status:** Production Ready  
-**Tested:** serviceslab.privilegecloud.cyberark.cloud  
-**PowerShell:** 5.1, 7.0, 7.1, 7.2, 7.3, 7.4+  
+**Status:** Production Ready
+**Tested:** serviceslab.privilegecloud.cyberark.cloud
+**PowerShell:** 5.1, 7.0, 7.1, 7.2, 7.3, 7.4+
 **Platform:** Windows, Linux, macOS (PowerShell 7+)

@@ -7,7 +7,7 @@
     Provides authentication to CyberArk Identity for Privilege Cloud environments.
     Supports OAuth, Username/Password, MFA, and OOBAUTHPIN authentication flows.
     Returns hashtable with Authorization and X-IDAP-NATIVE-CLIENT headers for PCloud APIs.
-    
+
     This version uses PowerShell 7+ features including classes and enums for better type safety.
 
 .NOTES

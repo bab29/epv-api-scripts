@@ -6,7 +6,7 @@
 .DESCRIPTION
     Comprehensive test script for manually testing all authentication methods,
     token caching, API integration, logging, and error handling.
-    
+
 .PARAMETER TestAll
     Run all tests automatically (requires OAuth credentials)
 
@@ -30,10 +30,10 @@
 param(
     [Parameter(ParameterSetName = 'TestAll')]
     [switch]$TestAll,
-    
+
     [Parameter(ParameterSetName = 'OAuthOnly')]
     [switch]$OAuthOnly,
-    
+
     [Parameter(ParameterSetName = 'Interactive')]
     [switch]$Interactive = $true
 )
@@ -88,7 +88,7 @@ function Write-TestResult {
         [bool]$Passed,
         [string]$Message = ""
     )
-    
+
     if ($Passed) {
         Write-Host "  ✅ PASS: $TestName" -ForegroundColor Green
         $script:TestResults.Passed += $TestName
@@ -109,20 +109,20 @@ function Write-TestSkipped {
 
 function Test-OAuth {
     Write-TestHeader "TEST 1: OAuth Authentication"
-    
+
     Write-Host "This test validates OAuth client credentials authentication."
     Write-Host ""
-    
+
     # Get credentials
     $creds = Get-Credential -Message "Enter OAuth Client ID (Username) and Client Secret (Password)"
     if (-not $creds) {
         Write-TestSkipped "OAuth Authentication" "No credentials provided"
         return $null
     }
-    
+
     # Get PCloud URL
     $pcloudUrl = Read-Host "Enter PCloud URL (e.g., https://subdomain.cyberark.cloud)"
-    
+
     # Normalize the URL for consistent testing
     $pcloudUrl = $pcloudUrl.TrimEnd('/')
     if (-not $pcloudUrl.EndsWith('/PasswordVault')) {
@@ -132,41 +132,41 @@ function Test-OAuth {
             $pcloudUrl = "$pcloudUrl/PasswordVault"
         }
     }
-    
+
     try {
         Write-Host "  Testing OAuth authentication..."
         Write-Host "  Using normalized URL: $pcloudUrl" -ForegroundColor Gray
         $headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL $pcloudUrl -Verbose
-        
+
         # Validate headers
         if ($headers -and $headers.Authorization -and $headers['X-IDAP-NATIVE-CLIENT']) {
             Write-TestResult "OAuth Authentication" $true
             Write-Host "    Authorization: $($headers.Authorization.Substring(0, 50))..." -ForegroundColor Gray
             Write-Host "    X-IDAP-NATIVE-CLIENT: $($headers['X-IDAP-NATIVE-CLIENT'])" -ForegroundColor Gray
-            
+
             # Test token caching
             Write-Host ""
             Write-Host "  Testing token caching..."
             $headers2 = Get-IdentityHeader -OAuthCreds $creds -PCloudURL $pcloudUrl
-            
+
             if ($headers.Authorization -eq $headers2.Authorization) {
                 Write-TestResult "Token Caching" $true
                 Write-Host "    Same token returned (cached successfully)" -ForegroundColor Gray
             } else {
                 Write-TestResult "Token Caching" $false "Different token returned"
             }
-            
+
             # Test force refresh
             Write-Host ""
             Write-Host "  Testing force refresh..."
             Start-Sleep -Seconds 1
             $headers3 = Get-IdentityHeader -OAuthCreds $creds -PCloudURL $pcloudUrl -Force
-            
+
             if ($headers3.Authorization) {
                 Write-TestResult "Force Refresh" $true
                 Write-Host "    New token obtained" -ForegroundColor Gray
             }
-            
+
             return @{
                 Headers = $headers
                 PCloudURL = $pcloudUrl
@@ -184,40 +184,40 @@ function Test-OAuth {
 
 function Test-PCloudAPI {
     param($Context)
-    
+
     if (-not $Context) {
         Write-TestSkipped "PCloud API Integration" "OAuth test failed"
         return
     }
-    
+
     Write-TestHeader "TEST 2: PCloud API Integration"
-    
+
     Write-Host "This test validates API calls using the authentication headers."
     Write-Host ""
-    
+
     # Use the normalized URL directly from context (already normalized in Test-OAuth)
     $pvwaUrl = $Context.PCloudURL.TrimEnd('/')
-    
+
     Write-Host "  Using PVWA URL: $pvwaUrl" -ForegroundColor Gray
     Write-Host ""
-    
+
     try {
         # Test Accounts API
         Write-Host "  Testing Accounts API..."
         $accountsUrl = "$pvwaUrl/API/Accounts?limit=1"
         $response = Invoke-RestMethod -Uri $accountsUrl -Headers $Context.Headers -Method Get
-        
+
         if ($response) {
             Write-TestResult "Accounts API" $true
             Write-Host "    Total accounts: $($response.count)" -ForegroundColor Gray
         }
-        
+
         # Test Safes API
         Write-Host ""
         Write-Host "  Testing Safes API..."
         $safesUrl = "$pvwaUrl/API/Safes?limit=5"
         $response = Invoke-RestMethod -Uri $safesUrl -Headers $Context.Headers -Method Get
-        
+
         if ($response) {
             Write-TestResult "Safes API" $true
             Write-Host "    Retrieved $($response.Safes.Count) safes" -ForegroundColor Gray
@@ -225,18 +225,18 @@ function Test-PCloudAPI {
                 Write-Host "      - $($_.SafeName)" -ForegroundColor Gray
             }
         }
-        
+
         # Test Users API
         Write-Host ""
         Write-Host "  Testing Users API..."
         $usersUrl = "$pvwaUrl/API/Users?limit=1"
         $response = Invoke-RestMethod -Uri $usersUrl -Headers $Context.Headers -Method Get
-        
+
         if ($response) {
             Write-TestResult "Users API" $true
             Write-Host "    Total users: $($response.Total)" -ForegroundColor Gray
         }
-        
+
     } catch {
         Write-TestResult "PCloud API Integration" $false $_.Exception.Message
     }
@@ -244,24 +244,24 @@ function Test-PCloudAPI {
 
 function Test-Logging {
     Write-TestHeader "TEST 3: Logging Infrastructure"
-    
+
     Write-Host "This test validates structured logging and file output."
     Write-Host ""
-    
+
     $logFile = Join-Path $env:TEMP "identityauth-test-$(Get-Date -Format 'yyyyMMddHHmmss').log"
-    
+
     try {
         Write-Host "  Enabling file logging..."
         Set-IdentityLogFile -Path $logFile
         Write-TestResult "Enable Logging" $true
         Write-Host "    Log file: $logFile" -ForegroundColor Gray
-        
+
         Write-Host ""
         Write-Host "  Writing test log entries..."
         Write-IdentityLog -Message "Test log entry 1" -Level Info
         Write-IdentityLog -Message "Test log entry 2" -Level Verbose
         Write-IdentityLog -Message "Test warning" -Level Warning
-        
+
         Write-Host ""
         Write-Host "  Verifying log file..."
         if (Test-Path $logFile) {
@@ -269,7 +269,7 @@ function Test-Logging {
             if ($logContent -like '*Test log entry*') {
                 Write-TestResult "Log File Writing" $true
                 Write-Host "    Log entries written successfully" -ForegroundColor Gray
-                
+
                 # Show log content
                 Write-Host ""
                 Write-Host "  Log file content:" -ForegroundColor Gray
@@ -282,12 +282,12 @@ function Test-Logging {
         } else {
             Write-TestResult "Log File Writing" $false "Log file not created"
         }
-        
+
         Write-Host ""
         Write-Host "  Disabling logging..."
         Disable-IdentityLogFile
         Write-TestResult "Disable Logging" $true
-        
+
     } catch {
         Write-TestResult "Logging Infrastructure" $false $_.Exception.Message
     } finally {
@@ -299,14 +299,14 @@ function Test-Logging {
 
 function Test-ErrorHandling {
     Write-TestHeader "TEST 4: Error Handling"
-    
+
     Write-Host "This test validates error handling with invalid inputs."
     Write-Host ""
-    
+
     try {
         Write-Host "  Testing invalid OAuth credentials..."
         $badCreds = New-Object PSCredential('invalid', (ConvertTo-SecureString 'invalid' -AsPlainText -Force))
-        
+
         try {
             $null = Get-IdentityHeader -OAuthCreds $badCreds -PCloudURL "https://invalid.cyberark.cloud"
             Write-TestResult "Invalid Credentials Error" $false "Should have thrown error"
@@ -314,7 +314,7 @@ function Test-ErrorHandling {
             Write-TestResult "Invalid Credentials Error" $true
             Write-Host "    Error caught: $($_.Exception.Message.Substring(0, [Math]::Min(80, $_.Exception.Message.Length)))" -ForegroundColor Gray
         }
-        
+
         Write-Host ""
         Write-Host "  Testing invalid URL format..."
         $validCreds = New-Object PSCredential('id', (ConvertTo-SecureString 'secret' -AsPlainText -Force))
@@ -325,7 +325,7 @@ function Test-ErrorHandling {
             Write-TestResult "Invalid URL Error" $true
             Write-Host "    Error caught: $($_.Exception.Message.Substring(0, [Math]::Min(80, $_.Exception.Message.Length)))" -ForegroundColor Gray
         }
-        
+
     } catch {
         Write-TestResult "Error Handling" $false $_.Exception.Message
     }
@@ -333,10 +333,10 @@ function Test-ErrorHandling {
 
 function Test-URLNormalization {
     Write-TestHeader "TEST 5: URL Normalization"
-    
+
     Write-Host "This test validates URL format handling."
     Write-Host ""
-    
+
     # Mock Invoke-RestMethod for testing
     $mockScript = {
         param($Uri, $Method, $Body, $ContentType)
@@ -346,13 +346,13 @@ function Test-URLNormalization {
             expires_in = 3600
         }
     }
-    
+
     try {
         Write-Host "  Testing URL without https://..."
         # Note: This would need actual mocking in production
         Write-TestResult "URL Normalization" $true
         Write-Host "    Module handles various URL formats" -ForegroundColor Gray
-        
+
     } catch {
         Write-TestResult "URL Normalization" $false $_.Exception.Message
     }
@@ -360,24 +360,24 @@ function Test-URLNormalization {
 
 function Test-ModuleInfo {
     Write-TestHeader "TEST 6: Module Validation"
-    
+
     Write-Host "This test validates module structure and metadata."
     Write-Host ""
-    
+
     try {
         $module = Get-Module IdentityAuth
-        
+
         Write-Host "  Checking module metadata..."
         if ($module.Name -eq 'IdentityAuth') {
             Write-TestResult "Module Name" $true
             Write-Host "    Name: $($module.Name)" -ForegroundColor Gray
         }
-        
+
         if ($module.Version) {
             Write-TestResult "Module Version" $true
             Write-Host "    Version: $($module.Version)" -ForegroundColor Gray
         }
-        
+
         Write-Host ""
         Write-Host "  Checking exported functions..."
         $exportedFunctions = $module.ExportedFunctions.Keys
@@ -387,7 +387,7 @@ function Test-ModuleInfo {
         } else {
             Write-TestResult "Exported Functions" $false "Get-IdentityHeader not found"
         }
-        
+
         Write-Host ""
         Write-Host "  Checking help documentation..."
         $help = Get-Help Get-IdentityHeader
@@ -397,7 +397,7 @@ function Test-ModuleInfo {
         } else {
             Write-TestResult "Help Documentation" $false "Help not available"
         }
-        
+
     } catch {
         Write-TestResult "Module Validation" $false $_.Exception.Message
     }
@@ -411,14 +411,14 @@ TEST SUMMARY
 $("=" * 80)
 
 "@ -ForegroundColor Cyan
-    
+
     Write-Host "✅ PASSED:  $($script:TestResults.Passed.Count)" -ForegroundColor Green
     if ($script:TestResults.Passed.Count -gt 0) {
         $script:TestResults.Passed | ForEach-Object {
             Write-Host "   - $_" -ForegroundColor Green
         }
     }
-    
+
     Write-Host ""
     Write-Host "❌ FAILED:  $($script:TestResults.Failed.Count)" -ForegroundColor Red
     if ($script:TestResults.Failed.Count -gt 0) {
@@ -426,7 +426,7 @@ $("=" * 80)
             Write-Host "   - $_" -ForegroundColor Red
         }
     }
-    
+
     Write-Host ""
     Write-Host "⏭️  SKIPPED: $($script:TestResults.Skipped.Count)" -ForegroundColor Yellow
     if ($script:TestResults.Skipped.Count -gt 0) {
@@ -434,7 +434,7 @@ $("=" * 80)
             Write-Host "   - $_" -ForegroundColor Yellow
         }
     }
-    
+
     $total = $script:TestResults.Passed.Count + $script:TestResults.Failed.Count
     if ($total -gt 0) {
         $successRate = [math]::Round(($script:TestResults.Passed.Count / $total) * 100, 1)
@@ -444,7 +444,7 @@ Success Rate: $successRate% ($($script:TestResults.Passed.Count) of $total tests
 
 "@
     }
-    
+
     Write-Host @"
 $("=" * 80)
 
@@ -469,7 +469,7 @@ $("=" * 80)
 Q. Quit
 
 "@
-    
+
     $choice = Read-Host "Select test (1-8 or Q)"
     return $choice
 }
@@ -481,7 +481,7 @@ if ($OAuthOnly) {
         Test-PCloudAPI $oauthContext
     }
     Show-TestSummary
-    
+
 } elseif ($TestAll) {
     $oauthContext = Test-OAuth
     if ($oauthContext) {
@@ -492,14 +492,14 @@ if ($OAuthOnly) {
     Test-URLNormalization
     Test-ModuleInfo
     Show-TestSummary
-    
+
 } else {
     # Interactive mode
     $oauthContext = $null
-    
+
     while ($true) {
         $choice = Show-Menu
-        
+
         switch ($choice) {
             '1' { $oauthContext = Test-OAuth }
             '2' { Test-PCloudAPI $oauthContext }
@@ -521,13 +521,13 @@ if ($OAuthOnly) {
             'Q' { break }
             default { Write-Host "Invalid choice. Please select 1-8 or Q." -ForegroundColor Red }
         }
-        
+
         if ($choice -eq 'Q') { break }
-        
+
         Write-Host ""
         Read-Host "Press Enter to continue"
     }
-    
+
     Show-TestSummary
 }
 

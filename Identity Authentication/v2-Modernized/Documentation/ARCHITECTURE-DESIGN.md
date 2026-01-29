@@ -19,36 +19,36 @@ flowchart TD
     Start([User calls Get-IdentityHeader]) --> SetHeaders[Set Headers:<br/>OobIdPAuth=true<br/>X-IDAP-NATIVE-CLIENT=true]
     SetHeaders --> StartAuth[POST /Security/StartAuthentication<br/>Body: User, Version]
     StartAuth --> CheckShortURL{IdpRedirectShortUrl<br/>present?}
-    
+
     CheckShortURL -->|Yes| ExtractData[Extract:<br/>- IdpRedirectShortUrl<br/>- IdpLoginSessionId<br/>- SessionId]
     CheckShortURL -->|No| FallbackFlow[Fall back to<br/>standard challenge flow]
-    
+
     ExtractData --> DisplayInstructions[Display formatted instructions:<br/>Steps to open URL<br/>Complete SAML<br/>Receive PIN]
     DisplayInstructions --> CheckPINParam{PIN parameter<br/>provided?}
-    
+
     CheckPINParam -->|Yes| UsePIN[Use provided PIN]
     CheckPINParam -->|No| PromptPIN[Prompt user for PIN]
-    
+
     PromptPIN --> ValidatePIN{PIN valid<br/>numeric?}
     ValidatePIN -->|No| PromptPIN
     ValidatePIN -->|Yes| UsePIN
-    
+
     UsePIN --> SubmitPIN[POST /Security/AdvanceAuthentication<br/>SessionId: IdpLoginSessionId<br/>MechanismId: OOBAUTHPIN<br/>Action: Answer<br/>Answer: PIN]
-    
+
     SubmitPIN --> CheckResponse{Response<br/>status?}
     CheckResponse -->|Success + Token| ExtractToken[Extract token from response]
     CheckResponse -->|Success + More Challenges| NextChallenge[Recursively call<br/>Invoke-Challenge]
     CheckResponse -->|Error| AuthFailed[Throw authentication error]
-    
+
     NextChallenge --> ProcessChallenge[Process additional challenge]
     ProcessChallenge --> CheckToken{Token<br/>received?}
     CheckToken -->|Yes| ExtractToken
     CheckToken -->|No| AuthFailed
-    
+
     ExtractToken --> StoreSession[Store in $script:CurrentSession:<br/>- Token<br/>- TokenExpiry<br/>- IdentityURL<br/>- AuthMethod: OOBAUTHPIN]
     StoreSession --> FormatHeaders[Format return headers:<br/>Authorization: Bearer token<br/>X-IDAP-NATIVE-CLIENT: true]
     FormatHeaders --> ReturnHeaders[Return Dictionary]
-    
+
     FallbackFlow --> StandardFlow[Process via<br/>Invoke-Challenge]
     StandardFlow --> End
     ReturnHeaders --> End
@@ -63,36 +63,36 @@ flowchart TD
     CheckSession -->|Use existing| CheckExpiry{Token<br/>expired?}
     CheckExpiry -->|No| ReturnExisting[Return current session]
     CheckExpiry -->|Yes| AttemptRefresh[Attempt auto-refresh]
-    
+
     CheckSession -->|New session| ValidateCreds{OAuth credentials<br/>provided?}
     ValidateCreds -->|No| ErrorNoCreds[Throw: Credentials required]
     ValidateCreds -->|Yes| ExtractCreds[Extract ClientID and ClientSecret<br/>from PSCredential/params]
-    
+
     ExtractCreds --> GetIdentityURL[Get Identity URL<br/>from PCloud URL]
     GetIdentityURL --> BuildRequest[Build OAuth request:<br/>grant_type=client_credentials<br/>client_id=ClientID<br/>client_secret=ClientSecret]
-    
+
     BuildRequest --> PostRequest["POST /OAuth2/Token/ClientId<br/>Content-Type: application/x-www-form-urlencoded"]
     PostRequest --> CheckResponse{HTTP<br/>Status?}
-    
+
     CheckResponse -->|200 OK| ParseToken[Parse response:<br/>- access_token<br/>- token_type<br/>- expires_in]
     CheckResponse -->|401| ErrorInvalidCreds[Throw: Invalid credentials]
     CheckResponse -->|Other| ErrorAPI[Throw: API error]
-    
+
     ParseToken --> CalculateExpiry[Calculate expiry:<br/>now + expires_in seconds]
     CalculateExpiry --> StoreSession[Store in $script:CurrentSession:<br/>- Token<br/>- TokenExpiry<br/>- IdentityURL<br/>- PCloudURL<br/>- AuthMethod: OAuth<br/>- StoredCredentials]
-    
+
     StoreSession --> BuildHeader[Build authorization header:<br/>Bearer access_token]
     BuildHeader --> BuildDict[Build Dictionary:<br/>Authorization<br/>X-IDAP-NATIVE-CLIENT]
     BuildDict --> ReturnStandard[Return Dictionary]
-    
+
     AttemptRefresh --> CheckStoredCreds{OAuth creds<br/>in session?}
     CheckStoredCreds -->|Yes| ReAuth[Re-authenticate<br/>with stored creds]
     CheckStoredCreds -->|No| ErrorNoRefresh[Throw: Cannot auto-refresh]
-    
+
     ReAuth --> CheckReAuthSuccess{Re-auth<br/>success?}
     CheckReAuthSuccess -->|Yes| UpdateSession[Update session:<br/>- New token<br/>- New expiry<br/>- Increment RefreshCount]
     CheckReAuthSuccess -->|No| ErrorReAuthFailed[Throw: Refresh failed]
-    
+
     UpdateSession --> BuildDict
     ReturnExisting --> End([End])
     ReturnStandard --> End
@@ -109,64 +109,64 @@ flowchart TD
 flowchart TD
     Start([Standard Authentication]) --> StartAuth[POST /Security/StartAuthentication<br/>Body: User, Version]
     StartAuth --> ParseResponse[Parse response:<br/>- SessionId<br/>- Challenges array]
-    
+
     ParseResponse --> IterateChallenges[Iterate through Challenges]
     IterateChallenges --> GetMechanisms[Extract Mechanisms array<br/>from current challenge]
-    
+
     GetMechanisms --> CountMechanisms{How many<br/>mechanisms?}
-    
+
     CountMechanisms -->|Multiple| DisplayMenu[Display numbered menu:<br/>1. Mechanism1<br/>2. Mechanism2<br/>...]
     DisplayMenu --> PromptSelection[Prompt user to select 1-N]
     PromptSelection --> ValidateSelection{Valid<br/>selection?}
     ValidateSelection -->|No| PromptSelection
     ValidateSelection -->|Yes| SelectMechanism[Select mechanism from array]
-    
+
     CountMechanisms -->|Single| SelectMechanism
-    
+
     SelectMechanism --> CheckAnswerType{Mechanism<br/>AnswerType?}
-    
+
     CheckAnswerType -->|Text| CheckMechName{Mechanism<br/>Name?}
     CheckMechName -->|UP| CheckStoredCreds{UPCreds<br/>parameter?}
     CheckStoredCreds -->|Yes| ExtractPassword[Extract password<br/>from PSCredential]
     CheckStoredCreds -->|No| PromptPassword[Prompt for password<br/>as SecureString]
-    
+
     ExtractPassword --> BuildAnswerBody[Build AdvanceAuth body:<br/>SessionId<br/>MechanismId<br/>Action: Answer<br/>Answer: password]
     PromptPassword --> BuildAnswerBody
-    
+
     CheckMechName -->|OTP| PromptOTP[Prompt for OTP code]
     PromptOTP --> BuildAnswerBody
-    
+
     CheckMechName -->|Other| PromptAnswer[Prompt for answer]
     PromptAnswer --> BuildAnswerBody
-    
+
     CheckAnswerType -->|StartTextOob| InitiatePush[Build AdvanceAuth body:<br/>Action: StartOOB]
     InitiatePush --> PostStartOOB[POST /Security/AdvanceAuthentication]
     PostStartOOB --> DisplayPushMsg[Output: Waiting for push approval...]
     DisplayPushMsg --> PollLoop[Build poll body:<br/>Action: Poll]
-    
+
     PollLoop --> PostPoll[POST /Security/AdvanceAuthentication]
     PostPoll --> CheckPollStatus{Response<br/>Summary?}
     CheckPollStatus -->|OobPending| Wait[Wait 2 seconds]
     Wait --> PollLoop
     CheckPollStatus -->|LoginSuccess| PushApproved[Push approved]
     CheckPollStatus -->|Error/Timeout| PushFailed[Throw: Push denied/timeout]
-    
+
     BuildAnswerBody --> PostAnswer[POST /Security/AdvanceAuthentication]
     PostAnswer --> CheckAnswerResponse{Response<br/>status?}
-    
+
     PushApproved --> CheckAnswerResponse
-    
+
     CheckAnswerResponse -->|Success + Token| ExtractToken[Extract Token from Result]
     CheckAnswerResponse -->|Success + No Token| CheckMoreChallenges{More<br/>challenges<br/>remaining?}
     CheckAnswerResponse -->|Failure| AuthFailed[Throw authentication error]
-    
+
     CheckMoreChallenges -->|Yes| IterateChallenges
     CheckMoreChallenges -->|No| AuthFailed
-    
+
     ExtractToken --> StoreSession[Store in $script:CurrentSession]
     StoreSession --> FormatHeaders[Format authorization headers]
     FormatHeaders --> ReturnHeaders[Return headers/object]
-    
+
     ReturnHeaders --> End([End])
     AuthFailed --> End
     PushFailed --> End
@@ -179,45 +179,45 @@ flowchart TD
     Start([Get-IdentityHeader called]) --> CheckForceNew{ForceNewSession<br/>parameter?}
     CheckForceNew -->|Yes| ClearSession[Clear current session]
     ClearSession --> NormalAuth[Proceed with normal auth]
-    
+
     CheckForceNew -->|No| CheckSession{$script:CurrentSession<br/>exists?}
     CheckSession -->|No| NormalAuth
     CheckSession -->|Yes| GetExpiry[Get TokenExpiry from session]
-    
+
     GetExpiry --> CalculateRemaining[Calculate time until expiry]
     CalculateRemaining --> CheckExpiry{Token<br/>status?}
-    
+
     CheckExpiry -->|Expired| LogExpired[Write-Verbose: Token expired]
     LogExpired --> CheckAuthMethod{AuthMethod?}
-    
+
     CheckExpiry -->|Expiring soon<br/>less than 60 sec| ShowWarning[Write-Warning:<br/>Token expiring soon]
     ShowWarning --> CheckAuthMethod
-    
+
     CheckExpiry -->|Valid<br/>more than 60 sec| LogValid[Write-Verbose: Using existing token]
     LogValid --> ReturnCurrent[Return current session headers]
-    
+
     CheckAuthMethod -->|OAuth| CheckStoredCreds{OAuth creds<br/>stored in session?}
     CheckStoredCreds -->|Yes| LogRefresh[Write-Verbose: Auto-refreshing OAuth token]
     LogRefresh --> ExtractCreds[Extract ClientID and ClientSecret<br/>from StoredCredentials]
-    
+
     ExtractCreds --> BuildOAuthRequest[Build OAuth token request]
     BuildOAuthRequest --> PostOAuth["POST /OAuth2/Token/ClientId"]
     PostOAuth --> CheckOAuthResponse{OAuth<br/>success?}
-    
+
     CheckOAuthResponse -->|Yes| UpdateToken[Update session:<br/>- New Token<br/>- New TokenExpiry<br/>- LastRefreshed timestamp<br/>- Increment RefreshCount]
     CheckOAuthResponse -->|No| LogOAuthFailed[Write-Verbose: OAuth refresh failed]
     LogOAuthFailed --> ThrowRefreshError[Throw: Failed to refresh token]
-    
+
     UpdateToken --> LogRefreshSuccess[Write-Verbose: Token refreshed successfully]
     LogRefreshSuccess --> ReturnRefreshed[Return refreshed session headers]
-    
+
     CheckStoredCreds -->|No| LogNoStoredCreds[Write-Verbose: No stored credentials]
     LogNoStoredCreds --> ThrowNoCredsError[Throw: Cannot auto-refresh]
-    
+
     CheckAuthMethod -->|UP/MFA/Other| LogMFARequired[Write-Warning: Manual re-auth required<br/>MFA cannot auto-refresh]
     LogMFARequired --> ClearExpiredSession[Clear expired session]
     ClearExpiredSession --> NormalAuth
-    
+
     NormalAuth --> AuthProcess[Execute full authentication<br/>as per authentication method]
     AuthProcess --> End([End])
     ReturnCurrent --> End
@@ -255,7 +255,7 @@ classDiagram
         +GetAuthHeader() Hashtable
         +Dispose() void
     }
-    
+
     class IdentityAuthResponse {
         +Bool Success
         +String Message
@@ -266,7 +266,7 @@ classDiagram
         +ToToken() String
         +HasChallenges() bool
     }
-    
+
     class ChallengeInfo {
         +String ChallengeId
         +Array Mechanisms
@@ -275,7 +275,7 @@ classDiagram
         +GetMechanismByName(String) PSCustomObject
         +HasMultipleMechanisms() bool
     }
-    
+
     class MechanismInfo {
         +String MechanismId
         +String Name
@@ -285,7 +285,7 @@ classDiagram
         +RequiresUserInput() bool
         +IsOOB() bool
     }
-    
+
     class SessionManager {
         -IdentitySession CurrentSession
         +GetSession() IdentitySession
@@ -294,13 +294,13 @@ classDiagram
         +HasActiveSession() bool
         +RefreshIfNeeded() bool
     }
-    
+
     class TokenValidator {
         +ValidateFormat(String) bool
         +ValidateExpiry(DateTime) bool
         +GetTokenClaims(String) Hashtable
     }
-    
+
     IdentitySession --> AuthenticationMechanism
     IdentityAuthResponse --> ChallengeInfo
     ChallengeInfo --> MechanismInfo
@@ -324,7 +324,7 @@ classDiagram
         PhoneCall = 8
         SecurityQuestions = 9
     }
-    
+
     class ChallengeType {
         <<enumeration>>
         Text = 1
@@ -334,7 +334,7 @@ classDiagram
         Answer = 5
         SAML = 6
     }
-    
+
     class MechanismType {
         <<enumeration>>
         UP = 1
@@ -347,7 +347,7 @@ classDiagram
         SQ = 8
         SAML = 9
     }
-    
+
     class SessionState {
         <<enumeration>>
         NotAuthenticated = 0
@@ -366,13 +366,13 @@ classDiagram
     class PrivateFunctions {
         <<interface>>
     }
-    
+
     class FormatToken {
         +Execute(String) Hashtable
         -AddNativeClientHeader(Hashtable) void
         -BuildAuthorizationHeader(String) Hashtable
     }
-    
+
     class InvokeRest {
         +Execute(String, String, Object, Hashtable) Object
         -BuildSplatParams(Hashtable) Hashtable
@@ -380,27 +380,27 @@ classDiagram
         -LogRequest(Hashtable) void
         -LogResponse(Object) void
     }
-    
+
     class InvokeAdvancedAuthBody {
         +Execute(String, PSCustomObject, String) PSCustomObject
         -HandleTextAnswer(PSCustomObject) String
         -HandleOOB(PSCustomObject) PSCustomObject
         -PollForCompletion(String, String) PSCustomObject
     }
-    
+
     class InvokeChallenge {
         +Execute(PSCustomObject, PSCredential, String) PSCustomObject
         -ParseChallenges(Array) Array
         -SelectMechanism(Array) PSCustomObject
         -ProcessMechanism(PSCustomObject, String) PSCustomObject
     }
-    
+
     class SessionHelpers {
         +ConvertFrom-SessionToHeaders(IdentitySession) Hashtable
         +New-IdentitySession(Hashtable) IdentitySession
         +Update-IdentitySession(IdentitySession) void
     }
-    
+
     PrivateFunctions <|-- FormatToken
     PrivateFunctions <|-- InvokeRest
     PrivateFunctions <|-- InvokeAdvancedAuthBody
@@ -567,11 +567,11 @@ Usage:
 <#
 .SYNOPSIS
     Builds distribution-ready module files from source.
-    
+
 .DESCRIPTION
     Combines all .ps1 files from Private/, Public/, Classes/, Enums/ into single .psm1 files.
     Validates with PSScriptAnalyzer before building.
-    
+
 .EXAMPLE
     .\Build-Module.ps1 -Version PS5.1
     .\Build-Module.ps1 -Version PS7
@@ -590,9 +590,9 @@ function Build-SingleModule {
         [string]$ModuleName,    # e.g., "IdentityAuth"
         [string]$OutputPath     # e.g., "Distribution"
     )
-    
+
     Write-Output "Building $ModuleName from $SourcePath..."
-    
+
     # Validate source with PSScriptAnalyzer
     Write-Output "  Running PSScriptAnalyzer..."
     $analysisResults = Invoke-ScriptAnalyzer -Path $SourcePath -Recurse -Settings ../PSScriptAnalyzerSettings.psd1
@@ -601,23 +601,23 @@ function Build-SingleModule {
         $analysisResults | Format-Table -AutoSize
         return $false
     }
-    
+
     # Create output directory
     $null = New-Item -Path $OutputPath -ItemType Directory -Force
-    
+
     # Start building combined .psm1
     $combinedContent = @()
-    
+
     # Add header
     $combinedContent += @"
 <#
 .SYNOPSIS
     $ModuleName - CyberArk Identity Authentication Module
-    
+
 .DESCRIPTION
     Authentication module for CyberArk Identity Security Platform Shared Services (ISPSS).
     Supports OAuth, UP, MFA, and OOBAUTHPIN authentication methods.
-    
+
 .NOTES
     Version:        2.0.0
     Generated:      $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
@@ -633,7 +633,7 @@ Set-StrictMode -Version Latest
 `$script:CurrentSession = `$null
 
 "@
-    
+
     # For PS7, add Classes first
     if ($ModuleName -eq 'IdentityAuth7') {
         Write-Output "  Adding Classes..."
@@ -643,7 +643,7 @@ Set-StrictMode -Version Latest
             $combinedContent += Get-Content -Path $file.FullName -Raw
             $combinedContent += "# EndRegion: Class - $($file.BaseName)`n"
         }
-        
+
         Write-Output "  Adding Enums..."
         $enumFiles = Get-ChildItem -Path "$SourcePath/Enums/*.ps1" -File | Sort-Object Name
         foreach ($file in $enumFiles) {
@@ -652,7 +652,7 @@ Set-StrictMode -Version Latest
             $combinedContent += "# EndRegion: Enum - $($file.BaseName)`n"
         }
     }
-    
+
     # Add Private functions
     Write-Output "  Adding Private functions..."
     $privateFiles = Get-ChildItem -Path "$SourcePath/Private/*.ps1" -File | Sort-Object Name
@@ -661,7 +661,7 @@ Set-StrictMode -Version Latest
         $combinedContent += Get-Content -Path $file.FullName -Raw
         $combinedContent += "# EndRegion: Private - $($file.BaseName)`n"
     }
-    
+
     # Add Public functions
     Write-Output "  Adding Public functions..."
     $publicFiles = Get-ChildItem -Path "$SourcePath/Public/*.ps1" -File | Sort-Object Name
@@ -670,7 +670,7 @@ Set-StrictMode -Version Latest
         $combinedContent += Get-Content -Path $file.FullName -Raw
         $combinedContent += "# EndRegion: Public - $($file.BaseName)`n"
     }
-    
+
     # Add module exports footer
     $publicFunctionNames = $publicFiles.BaseName
     $combinedContent += @"
@@ -680,21 +680,21 @@ Export-ModuleMember -Function @(
     $(($publicFunctionNames | ForEach-Object { "'$_'" }) -join ",`n    ")
 )
 "@
-    
+
     # Write combined file
     $outputFile = Join-Path $OutputPath "$ModuleName.psm1"
     $combinedContent | Out-File -FilePath $outputFile -Encoding UTF8 -Force
     Write-Output "  Created: $outputFile"
-    
+
     # Copy manifest
     Copy-Item -Path "$SourcePath/$ModuleName.psd1" -Destination "$OutputPath/$ModuleName.psd1" -Force
     Write-Output "  Copied: $ModuleName.psd1"
-    
+
     # Test import
     Write-Output "  Testing import..."
     Import-Module $outputFile -Force -ErrorAction Stop
     Remove-Module $ModuleName -ErrorAction SilentlyContinue
-    
+
     Write-Output "  SUCCESS: $ModuleName built successfully!`n"
     return $true
 }
@@ -791,7 +791,7 @@ Write-Output "="*80
     Copyright = '(c) 2026 CyberArk. All rights reserved.'
     Description = 'Authentication module for CyberArk Identity Security Platform Shared Services (ISPSS)'
     PowerShellVersion = '5.1'  # or '7.0' for IdentityAuth7.psd1
-    
+
     FunctionsToExport = @(
         'Get-IdentityHeader',
         'Get-IdentityURL',
@@ -799,10 +799,10 @@ Write-Output "="*80
         'Clear-IdentitySession',
         'Get-IdentitySession'
     )
-    
+
     VariablesToExport = @()  # No variables exported
     AliasesToExport = @()    # No aliases
-    
+
     PrivateData = @{
         PSData = @{
             Tags = @('CyberArk', 'Identity', 'Authentication', 'PrivilegeCloud', 'PAM', 'ISPSS')
@@ -829,15 +829,15 @@ class IdentitySession {
     [datetime]$TokenExpiry                  # Calculated expiry timestamp
     [string]$IdentityURL                    # https://tenant.id.cyberark.cloud
     [string]$PCloudURL                      # https://tenant.privilegecloud.cyberark.cloud
-    
+
     # User and session metadata
     [string]$Username                       # Authenticated username
     [string]$SessionId                      # Identity SessionId from StartAuthentication
     [AuthenticationMechanism]$AuthMethod    # Method used (OAuth, UP, OOBAUTHPIN, etc.)
-    
+
     # Optional stored credentials (OAuth only for auto-refresh)
     [PSCredential]$StoredCredentials        # Securely stored OAuth credentials
-    
+
     # Additional metadata
     [hashtable]$Metadata = @{
         CreatedAt = [datetime]::Now
@@ -846,10 +846,10 @@ class IdentitySession {
         PCloudVersion = $null
         TenantId = $null
     }
-    
+
     # Constructor
     IdentitySession() { }
-    
+
     IdentitySession([hashtable]$Properties) {
         $this.Token = $Properties.Token
         $this.TokenExpiry = $Properties.TokenExpiry
@@ -860,26 +860,26 @@ class IdentitySession {
         $this.AuthMethod = $Properties.AuthMethod
         $this.StoredCredentials = $Properties.StoredCredentials
     }
-    
+
     # Methods
     [bool] IsExpired() {
         return (Get-Date) -gt $this.TokenExpiry
     }
-    
+
     [bool] IsExpiringSoon([int]$ThresholdSeconds = 60) {
         $expiryThreshold = (Get-Date).AddSeconds($ThresholdSeconds)
         return $this.TokenExpiry -lt $expiryThreshold
     }
-    
+
     [void] Refresh() {
         if ($this.AuthMethod -eq [AuthenticationMechanism]::OAuth) {
             if ($null -ne $this.StoredCredentials) {
                 Write-Verbose "Auto-refreshing OAuth token"
-                
+
                 $ClientId = $this.StoredCredentials.UserName
                 $bstr = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($this.StoredCredentials.Password)
                 $ClientSecret = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
-                
+
                 try {
                     $body = "grant_type=client_credentials&client_id=$ClientId&client_secret=$ClientSecret"
                     $oauthParams = @{
@@ -890,12 +890,12 @@ class IdentitySession {
                         ErrorAction = 'Stop'
                     }
                     $response = Invoke-RestMethod @oauthParams
-                    
+
                     $this.Token = $response.access_token
                     $this.TokenExpiry = (Get-Date).AddSeconds($response.expires_in)
                     $this.Metadata.LastRefreshed = Get-Date
                     $this.Metadata.RefreshCount++
-                    
+
                     Write-Verbose "OAuth token refreshed successfully (Refresh count: $($this.Metadata.RefreshCount))"
                 } catch {
                     throw "Failed to refresh OAuth token: $($_.Exception.Message)"
@@ -912,7 +912,7 @@ class IdentitySession {
             throw "Cannot auto-refresh: AuthMethod '$($this.AuthMethod)' requires manual user interaction"
         }
     }
-    
+
     [hashtable] GetAuthHeader() {
         if ($this.IsExpired()) {
             throw "Token expired. Re-authentication required."
@@ -922,10 +922,10 @@ class IdentitySession {
             'X-IDAP-NATIVE-CLIENT' = 'true'
         }
     }
-    
+
     [void] Dispose() {
         Write-Verbose "Disposing Identity session for user: $($this.Username)"
-        
+
         # Call logout endpoint
         try {
             $logoutUrl = "$($this.IdentityURL)/Security/logout"
@@ -940,7 +940,7 @@ class IdentitySession {
         } catch {
             Write-Verbose "Logout API call failed: $($_.Exception.Message)"
         }
-        
+
         # Clear sensitive data
         $this.Token = $null
         $this.StoredCredentials = $null
@@ -992,7 +992,7 @@ function Test-SessionExpiringSoon {
 
 function Update-IdentitySession {
     param([hashtable]$Session)
-    
+
     if ($Session.AuthMethod -eq 'OAuth') {
         if ($null -ne $Session.StoredCredentials) {
             # Same OAuth refresh logic as PS7 class method
@@ -1007,7 +1007,7 @@ function Update-IdentitySession {
 
 function Get-SessionAuthHeader {
     param([hashtable]$Session)
-    
+
     if (Test-SessionExpired -Session $Session) {
         throw "Token expired. Re-authentication required."
     }
@@ -1019,9 +1019,9 @@ function Get-SessionAuthHeader {
 
 function Remove-IdentitySessionData {
     param([hashtable]$Session)
-    
+
     Write-Verbose "Disposing Identity session for user: $($Session.Username)"
-    
+
     # Call logout endpoint
     try {
         $logoutUrl = "$($Session.IdentityURL)/Security/logout"
@@ -1036,7 +1036,7 @@ function Remove-IdentitySessionData {
     } catch {
         Write-Verbose "Logout API call failed: $($_.Exception.Message)"
     }
-    
+
     # Clear sensitive data
     $Session.Token = $null
     $Session.StoredCredentials = $null
@@ -1164,18 +1164,18 @@ sequenceDiagram
     participant SecureString
     participant BSTR
     participant API
-    
+
     User->>Script: Provide credentials
     Script->>PSCredential: Create PSCredential object
     PSCredential->>SecureString: Store password as SecureString (DPAPI encrypted)
-    
+
     Script->>Script: Need plaintext for API
     Script->>BSTR: SecureStringToBSTR(SecureString)
     BSTR->>Script: Return BSTR pointer
     Script->>Script: PtrToStringAuto(BSTR)
     Script->>API: POST with plaintext password
     API-->>Script: Response
-    
+
     Script->>BSTR: ZeroFreeBSTR(BSTR) - Clear memory
     Script->>Script: Set plaintext variable to $null
     Note over Script,API: Plaintext lifetime < 1 second
@@ -1345,37 +1345,37 @@ function Invoke-IdentityAPI {
         [object]$Body,
         [hashtable]$Headers
     )
-    
+
     try {
         $invokeParams = @{
             Uri = $Uri
             Method = $Method
             ErrorAction = 'Stop'
         }
-        
+
         if ($Body) {
             $invokeParams.Body = $Body
             $invokeParams.ContentType = 'application/json'
         }
-        
+
         if ($Headers) {
             $invokeParams.Headers = $Headers
         }
-        
+
         Write-Verbose "API Call: $Method $Uri"
         $response = Invoke-RestMethod @invokeParams
         Write-Verbose "API Response: Success"
-        
+
         return $response
-        
+
     } catch {
         $statusCode = $null
         $errorMessage = $_.Exception.Message
-        
+
         if ($_.Exception.Response) {
             $statusCode = $_.Exception.Response.StatusCode.value__
         }
-        
+
         # Parse error details
         $errorDetails = $null
         if ($_.ErrorDetails.Message) {
@@ -1385,7 +1385,7 @@ function Invoke-IdentityAPI {
                 $errorDetails = $_.ErrorDetails.Message
             }
         }
-        
+
         # Map HTTP status codes to meaningful errors
         $mappedError = switch ($statusCode) {
             401 { "Authentication failed: Invalid credentials or token expired" }
@@ -1396,9 +1396,9 @@ function Invoke-IdentityAPI {
             503 { "Service unavailable: Identity platform may be down" }
             default { "API error ($statusCode): $($errorDetails.message ?? $errorMessage)" }
         }
-        
+
         Write-Verbose "API Error: $mappedError"
-        
+
         $errorRecord = [System.Management.Automation.ErrorRecord]::new(
             [System.Exception]::new($mappedError),
             "IdentityAPI_$statusCode",

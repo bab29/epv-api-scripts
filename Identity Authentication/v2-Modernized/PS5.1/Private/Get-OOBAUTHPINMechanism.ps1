@@ -14,9 +14,9 @@ function Get-OOBAUTHPINMechanism {
         [Parameter(Mandatory)]
         [array]$Challenges
     )
-    
+
     Write-Verbose "Searching for OOBAUTHPIN mechanism in challenges"
-    
+
     foreach ($challenge in $Challenges) {
         foreach ($mechanism in $challenge.Mechanisms) {
             if ($mechanism.AnswerType -eq 'StartTextOob' -and $mechanism.PromptSelectMech -match 'OOBAUTHPIN') {
@@ -25,6 +25,6 @@ function Get-OOBAUTHPINMechanism {
             }
         }
     }
-    
+
     throw "OOBAUTHPIN mechanism not available for this user. Available mechanisms: $($Challenges.Mechanisms.AnswerType -join ', ')"
 }

@@ -13,13 +13,13 @@ function Test-AuthenticationResponse {
     param(
         [Parameter(Mandatory)]
         [object]$Response,
-        
+
         [Parameter(Mandatory)]
         [string]$AuthMethod
     )
-    
+
     Write-IdentityLog -Message "Validating $AuthMethod response" -Level Verbose
-    
+
     # Check if response is null
     if ($null -eq $Response) {
         $errorRecord = New-IdentityErrorRecord `
@@ -29,12 +29,12 @@ function Test-AuthenticationResponse {
             -RecommendedAction "Check network connectivity and Identity service status"
         throw $errorRecord
     }
-    
+
     # Check for success field
     if ($Response.PSObject.Properties['success']) {
         if (-not $Response.success) {
             $message = if ($Response.Message) { $Response.Message } else { "Authentication failed" }
-            
+
             $errorRecord = New-IdentityErrorRecord `
                 -Message "$AuthMethod failed: $message" `
                 -ErrorId 'AuthenticationFailed' `
@@ -43,7 +43,7 @@ function Test-AuthenticationResponse {
             throw $errorRecord
         }
     }
-    
+
     # Check for auth token (for completed auth)
     if ($Response.PSObject.Properties['Result']) {
         if ($Response.Result.PSObject.Properties['Auth']) {
@@ -57,7 +57,7 @@ function Test-AuthenticationResponse {
             }
         }
     }
-    
+
     Write-IdentityLog -Message "$AuthMethod response validated successfully" -Level Verbose
     return $true
 }

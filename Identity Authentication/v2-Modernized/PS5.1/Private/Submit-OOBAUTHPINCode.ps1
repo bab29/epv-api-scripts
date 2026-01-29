@@ -13,19 +13,19 @@ function Submit-OOBAUTHPINCode {
     param(
         [Parameter(Mandatory)]
         [string]$SessionId,
-        
+
         [Parameter(Mandatory)]
         [string]$MechanismId,
-        
+
         [Parameter(Mandatory)]
         [string]$PINCode,
-        
+
         [Parameter(Mandatory)]
         [string]$IdentityTenantURL
     )
-    
+
     Write-Verbose "Submitting OOBAUTHPIN code for verification"
-    
+
     $advanceAuthURL = "$IdentityTenantURL/Security/AdvanceAuthentication"
     $body = @{
         SessionId   = $SessionId
@@ -33,14 +33,14 @@ function Submit-OOBAUTHPINCode {
         Action      = 'Answer'
         Answer      = $PINCode
     } | ConvertTo-Json -Compress
-    
+
     try {
         Write-Verbose "Verifying PIN code..."
         $response = Invoke-RestMethod -Uri $advanceAuthURL -Method Post -Body $body -ContentType 'application/json' -ErrorAction Stop
-        
+
         if ($response.success) {
             Write-Verbose "PIN verification successful"
-            
+
             # Check if we have auth token
             if ($response.Result.Auth) {
                 Write-Verbose "Authentication token received"

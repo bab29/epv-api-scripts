@@ -12,13 +12,13 @@
 param(
     [Parameter()]
     [string]$PCloudURL,
-    
+
     [Parameter()]
     [string]$IdentityURL,
-    
+
     [Parameter()]
     [switch]$TestConnectivity,
-    
+
     [Parameter()]
     [switch]$ValidateModule
 )
@@ -68,15 +68,15 @@ $env:PSModulePath -split [IO.Path]::PathSeparator | ForEach-Object {
 # Connectivity tests
 if ($TestConnectivity) {
     Write-Host "`nConnectivity Tests:"
-    
+
     if ($PCloudURL) {
         Write-Host "`n  Testing PCloud URL: $PCloudURL"
-        
+
         # Parse URL
         try {
             $uri = [System.Uri]$PCloudURL
             $hostname = $uri.Host
-            
+
             # DNS test
             Write-Host "    DNS Resolution..."
             try {
@@ -85,7 +85,7 @@ if ($TestConnectivity) {
             } catch {
                 Write-Host "      ❌ DNS resolution failed: $_" -ForegroundColor Red
             }
-            
+
             # HTTPS test
             Write-Host "    HTTPS Connectivity..."
             try {
@@ -98,14 +98,14 @@ if ($TestConnectivity) {
             Write-Host "    ❌ Invalid URL format" -ForegroundColor Red
         }
     }
-    
+
     if ($IdentityURL) {
         Write-Host "`n  Testing Identity URL: $IdentityURL"
-        
+
         try {
             $uri = [System.Uri]$IdentityURL
             $hostname = $uri.Host
-            
+
             Write-Host "    DNS Resolution..."
             try {
                 $addresses = [System.Net.Dns]::GetHostAddresses($hostname)
@@ -113,7 +113,7 @@ if ($TestConnectivity) {
             } catch {
                 Write-Host "      ❌ DNS resolution failed: $_" -ForegroundColor Red
             }
-            
+
             Write-Host "    HTTPS Connectivity..."
             try {
                 $response = Invoke-WebRequest -Uri $IdentityURL -Method Head -TimeoutSec 5 -UseBasicParsing
@@ -130,7 +130,7 @@ if ($TestConnectivity) {
 # Module validation
 if ($ValidateModule -and $module) {
     Write-Host "`nModule Validation:"
-    
+
     # Check required functions
     $requiredFunctions = @('Get-IdentityHeader')
     foreach ($func in $requiredFunctions) {
@@ -138,7 +138,7 @@ if ($ValidateModule -and $module) {
         $icon = if ($exists) { "✅" } else { "❌" }
         Write-Host "  $icon Function: $func"
     }
-    
+
     # Check help
     Write-Host "`n  Checking help documentation..."
     $help = Get-Help Get-IdentityHeader
@@ -147,7 +147,7 @@ if ($ValidateModule -and $module) {
     } else {
         Write-Host "    ⚠️  Help documentation missing" -ForegroundColor Yellow
     }
-    
+
     # Check private functions
     $privatePath = Join-Path (Split-Path $module.Path) 'Private'
     if (Test-Path $privatePath) {

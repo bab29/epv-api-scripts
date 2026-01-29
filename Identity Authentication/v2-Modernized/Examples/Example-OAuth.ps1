@@ -38,7 +38,7 @@ Authenticating...
 try {
     # Authenticate
     $headers = Get-IdentityHeader -OAuthCreds $oauthCreds -PCloudURL $pcloudUrl -Verbose
-    
+
     Write-Host @"
 
 SUCCESS! Authentication headers received.
@@ -51,15 +51,15 @@ Token is cached and will be reused for subsequent calls.
 
 Example API Call:
 "@
-    
+
     # Example: Get account count
     $pvwaUrl = $pcloudUrl -replace '\.cyberark\.cloud.*', '.privilegecloud.cyberark.cloud/PasswordVault'
     $accountsUrl = "$pvwaUrl/API/Accounts?limit=1"
-    
+
     Write-Host "  Calling: $accountsUrl"
-    
+
     $response = Invoke-RestMethod -Uri $accountsUrl -Headers $headers -Method Get
-    
+
     Write-Host @"
 
 API call successful!
@@ -67,22 +67,22 @@ Total accounts in vault: $($response.count)
 
 Token Caching Demo:
 "@
-    
+
     # Second call uses cached token
     Write-Host "  Making second call (should use cached token)..."
     $headers2 = Get-IdentityHeader -OAuthCreds $oauthCreds -PCloudURL $pcloudUrl -Verbose
-    
+
     Write-Host @"
 
 Second call completed (token was cached)!
 
 Force Refresh Demo:
 "@
-    
+
     # Force refresh
     Write-Host "  Forcing token refresh with -Force parameter..."
     $headers3 = Get-IdentityHeader -OAuthCreds $oauthCreds -PCloudURL $pcloudUrl -Force -Verbose
-    
+
     Write-Host @"
 
 Token forcefully refreshed!
@@ -92,7 +92,7 @@ OAuth authentication demonstration complete!
 ================================================================================
 
 "@
-    
+
 } catch {
     Write-Host @"
 

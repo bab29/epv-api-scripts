@@ -14,26 +14,26 @@ function Start-OOBAUTHPINAuthentication {
     param(
         [Parameter(Mandatory)]
         [string]$Username,
-        
+
         [Parameter(Mandatory)]
         [string]$IdentityTenantURL
     )
-    
+
     Write-Verbose "Starting OOBAUTHPIN authentication for user: $Username"
-    
+
     $startAuthURL = "$IdentityTenantURL/Security/StartAuthentication"
     $body = @{
         User    = $Username
         Version = '1.0'
     } | ConvertTo-Json -Compress
-    
+
     try {
         Write-Verbose "Sending StartAuthentication request..."
         $response = Invoke-RestMethod -Uri $startAuthURL -Method Post -Body $body -ContentType 'application/json' -ErrorAction Stop
-        
+
         if ($response.success -and $response.Result.SessionId) {
             Write-Verbose "Authentication session started. SessionId: $($response.Result.SessionId)"
-            
+
             return @{
                 SessionId  = $response.Result.SessionId
                 Challenges = $response.Result.Challenges

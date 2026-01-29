@@ -13,7 +13,7 @@ class OAuthTokenResponse {
     [int]$ExpiresIn
     [datetime]$ExpiresAt
     [datetime]$IssuedAt
-    
+
     OAuthTokenResponse([string]$token, [string]$type, [int]$expires) {
         $this.AccessToken = $token
         $this.TokenType = $type
@@ -21,21 +21,21 @@ class OAuthTokenResponse {
         $this.IssuedAt = [datetime]::Now
         $this.ExpiresAt = $this.IssuedAt.AddSeconds($expires)
     }
-    
+
     [bool] IsValid() {
         return -not $this.IsExpired()
     }
-    
+
     [bool] IsExpired() {
         return $this.IsExpired(300)
     }
-    
+
     [bool] IsExpired([int]$bufferSeconds) {
         $now = [datetime]::Now
         $expiryWithBuffer = $this.ExpiresAt.AddSeconds(-$bufferSeconds)
         return $now -ge $expiryWithBuffer
     }
-    
+
     [int] GetRemainingSeconds() {
         if ($this.IsExpired(0)) {
             return 0

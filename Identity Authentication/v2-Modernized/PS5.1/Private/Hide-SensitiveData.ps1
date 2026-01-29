@@ -12,12 +12,12 @@ function Hide-SensitiveData {
     param(
         [Parameter(Mandatory)]
         [string]$Text,
-        
+
         [Parameter()]
         [ValidateSet('Token', 'Password', 'ClientSecret', 'PIN', 'OTP')]
         [string]$DataType = 'Token'
     )
-    
+
     switch ($DataType) {
         'Token' {
             # Mask bearer tokens (show first 10 chars only)
@@ -48,7 +48,7 @@ function Hide-SensitiveData {
             return '***'
         }
     }
-    
+
     return $Text
 }
 
@@ -58,13 +58,13 @@ function Get-SafeErrorMessage {
         [Parameter(Mandatory)]
         [System.Management.Automation.ErrorRecord]$ErrorRecord
     )
-    
+
     $message = $ErrorRecord.Exception.Message
-    
+
     # Mask common sensitive patterns
     $message = $message -replace 'Bearer\s+[A-Za-z0-9\-._~+/]+', 'Bearer ***REDACTED***'
     $message = $message -replace 'password["\s:=]+[^"\s,}]+', 'password ***REDACTED***'
     $message = $message -replace 'client_secret["\s:=]+[^"\s,}]+', 'client_secret ***REDACTED***'
-    
+
     return $message
 }

@@ -144,23 +144,23 @@ function Invoke-NewAuthMethod {
     param(
         [Parameter(Mandatory)]
         [string]$SessionId,
-        
+
         [Parameter(Mandatory)]
         [string]$MechanismId,
-        
+
         [Parameter(Mandatory)]
         [string]$IdentityTenantURL
     )
-    
+
     Write-IdentityLog -Message "Starting new auth method" -Level Verbose -Component 'NewAuth'
-    
+
     try {
         # Implementation
         $response = Invoke-RestMethod -Uri $url -Method Post -Body $body -ContentType 'application/json'
-        
+
         # Validate response
         $null = Test-AuthenticationResponse -Response $response -AuthMethod 'NewAuth'
-        
+
         if ($response.Result.Auth) {
             Write-IdentityLog -Message "New auth successful" -Level Verbose -Component 'NewAuth'
             return $response.Result.Auth
@@ -187,11 +187,11 @@ Add process block logic:
 ```powershell
 if ($PSCmdlet.ParameterSetName -eq 'NewAuth') {
     Write-Verbose "Authenticating with NewAuth"
-    
+
     $authSession = Start-OOBAUTHPINAuthentication -Username $Username -IdentityTenantURL $IdentityURL
     $mechanism = Get-AuthenticationMechanism -Challenges $authSession.Challenges -AnswerType 'NewType'
     $authToken = Invoke-NewAuthMethod -SessionId $authSession.SessionId -MechanismId $mechanism.MechanismId -IdentityTenantURL $IdentityURL
-    
+
     $headers = Format-IdentityHeaders -AccessToken $authToken
     return $headers
 }
@@ -213,7 +213,7 @@ Context 'NewAuth Authentication' {
     BeforeAll {
         Mock Invoke-RestMethod { @{ Result = @{ Auth = 'test_token' } } } -ModuleName IdentityAuth
     }
-    
+
     It 'Should authenticate with NewAuth' {
         $result = Get-IdentityHeader -NewAuthParameter "value" -PCloudURL $url
         $result | Should -Not -BeNullOrEmpty
@@ -239,7 +239,7 @@ Describe 'Function' {
     BeforeAll {
         Mock Invoke-RestMethod { @{ success = $true } } -ModuleName IdentityAuth
     }
-    
+
     It 'Should work' {
         $result = Test-Function
         $result | Should -Not -BeNullOrEmpty
