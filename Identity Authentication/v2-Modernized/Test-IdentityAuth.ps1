@@ -196,14 +196,14 @@ function Test-OAuth {
 
 function Test-PCloudAPI {
     param($Context)
-    
+
     if (-not $Context) {
         Write-TestSkipped "PCloud API Integration" "OAuth test failed"
         return
     }
-    
+
     Write-TestHeader "TEST 2: PCloud API Integration"
-    
+
     Write-Host "This test validates API calls using the authentication headers."
     Write-Host ""
 
@@ -270,14 +270,14 @@ function Test-Logging {
 
         Write-Host ""
         Write-Host "  Testing OAuth authentication with logging..."
-        
+
         # Use cached OAuth credentials if available from previous test
         if ($script:TestContext.OAuthCreds -and $script:TestContext.PCloudURL) {
             Write-Host "    Using cached test credentials" -ForegroundColor Gray
             try {
                 # Force new token to generate log entries
                 $null = Get-IdentityHeader -OAuthCreds $script:TestContext.OAuthCreds -PCloudURL $script:TestContext.PCloudURL -Force -Verbose
-                
+
                 Write-Host ""
                 Write-Host "  Verifying log file..."
                 if (Test-Path $logFile) {
@@ -286,7 +286,7 @@ function Test-Logging {
                         Write-TestResult "Log File Writing" $true
                         Write-Host "    Log entries written successfully" -ForegroundColor Gray
                         Write-Host "    Log file size: $((Get-Item $logFile).Length) bytes" -ForegroundColor Gray
-                        
+
                         # Show sample log entries (first 5 lines)
                         Write-Host ""
                         Write-Host "  Sample log entries:" -ForegroundColor Gray
@@ -311,17 +311,32 @@ function Test-Logging {
             Write-Host "    Run OAuth test (option 1) first, then run this test" -ForegroundColor Yellow
             Write-TestSkipped "Log File Writing" "No OAuth test context"
         }
-        
+
         Write-Host ""
         Write-Host "  Disabling logging..."
         Disable-IdentityLogFile
         Write-TestResult "Disable Logging" $true
-        
+
     } catch {
         Write-TestResult "Logging Infrastructure" $false $_.Exception.Message
     } finally {
         # Clean up log file
+        if (Test-Path $logFile) {
+            Remove-Item $logFile -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
 
+function Test-ErrorHandling {
+    Write-TestHeader "TEST 4: Error Handling"
+    
+    Write-Host "This test validates error handling with invalid inputs."
+    Write-Host ""
+    
+    try {
+        Write-Host "  Testing invalid OAuth credentials..."
+        $badCreds = New-Object PSCredential('invalid', (ConvertTo-SecureString 'invalid' -AsPlainText -Force))
+        
         try {
             $null = Get-IdentityHeader -OAuthCreds $badCreds -PCloudURL "https://invalid.cyberark.cloud"
             Write-TestResult "Invalid Credentials Error" $false "Should have thrown error"
@@ -340,7 +355,7 @@ function Test-Logging {
             Write-TestResult "Invalid URL Error" $true
             Write-Host "    Error caught: $($_.Exception.Message.Substring(0, [Math]::Min(80, $_.Exception.Message.Length)))" -ForegroundColor Gray
         }
-
+        
     } catch {
         Write-TestResult "Error Handling" $false $_.Exception.Message
     }
