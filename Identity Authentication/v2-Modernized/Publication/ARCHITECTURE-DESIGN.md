@@ -989,10 +989,10 @@ $headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL 'https://tenant.cybe
 # Get headers
 $headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL 'https://tenant.cyberark.cloud'
 
-# Use with Accounts_Onboard_Utility.ps1 (pass Authorization header only)
-.\Accounts_Onboard_Utility.ps1 -PVWAURL 'https://tenant.privilegecloud.cyberark.cloud' -logonToken $headers.Authorization
+# Use with Accounts_Onboard_Utility.ps1
+.\Accounts_Onboard_Utility.ps1 -PVWAURL 'https://tenant.privilegecloud.cyberark.cloud' -logonToken $headers
 
-# Use with direct REST API call (pass full hashtable)
+# Use with any Privilege Cloud API
 $accountsUrl = 'https://tenant.privilegecloud.cyberark.cloud/PasswordVault/API/Accounts'
 $accounts = Invoke-RestMethod -Uri $accountsUrl -Method Get -Headers $headers
 ```
@@ -1007,21 +1007,17 @@ $accounts = Invoke-RestMethod -Uri $accountsUrl -Method Get -Headers $headers
 
 ### Compatibility with Accounts_Onboard_Utility.ps1
 
-The Accounts_Onboard_Utility.ps1 script accepts `$logonToken` parameter as a Bearer token string. Extract the Authorization value from the returned hashtable:
+The Accounts_Onboard_Utility.ps1 script accepts the hashtable returned by `Get-IdentityHeader`:
 
 ```powershell
 $headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL 'https://tenant.cyberark.cloud'
 $pvwaUrl = 'https://tenant.privilegecloud.cyberark.cloud'
 
-# Pass the Authorization header value (string) to -logonToken
-.\Accounts_Onboard_Utility.ps1 -PVWAURL $pvwaUrl -logonToken $headers.Authorization
+# Pass the hashtable to -logonToken
+.\Accounts_Onboard_Utility.ps1 -PVWAURL $pvwaUrl -logonToken $headers
 ```
 
-**For Direct API Calls:**
-```powershell
-# Use the full hashtable with Invoke-RestMethod
-$accounts = Invoke-RestMethod -Uri $apiUrl -Method Get -Headers $headers
-```
+**All epv-api-scripts that use `-logonToken` accept the hashtable format.**
 
 **Note:** This format is specifically for **Privilege Cloud (PCloud)** which uses Bearer tokens. On-premises PVWA installations use session tokens from CyberArk Authentication, not Identity authentication.
 

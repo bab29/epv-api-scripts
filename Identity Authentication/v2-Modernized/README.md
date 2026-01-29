@@ -63,8 +63,8 @@ $oauthCreds = New-Object PSCredential($clientId, $clientSecret)
 # Authenticate and get token
 $headers = Get-IdentityHeader -OAuthCreds $oauthCreds -PCloudURL 'https://subdomain.cyberark.cloud'
 
-# Use token with other scripts
-.\Accounts_Onboard_Utility.ps1 -logonToken $headers.Authorization -PVWAURL $PCloudURL -CSVFile accounts.csv
+# Use headers with other scripts
+.\Accounts_Onboard_Utility.ps1 -logonToken $headers -PVWAURL $PCloudURL -CSVFile accounts.csv
 ```
 
 #### Interactive Authentication (Username/Password)
@@ -181,10 +181,10 @@ All authentication functions return a **hashtable** with CyberArk API headers:
 ```powershell
 $headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL $PCloudURL
 
-# Option 1: Pass Authorization header only (for -logonToken parameter)
-.\Script.ps1 -logonToken $headers.Authorization
+# Use with any script that accepts -logonToken
+.\Accounts_Onboard_Utility.ps1 -logonToken $headers -PVWAURL $PCloudURL
 
-# Option 2: Use full headers hashtable
+# Use with Invoke-RestMethod
 Invoke-RestMethod -Uri $apiUrl -Headers $headers
 ```
 
@@ -288,16 +288,18 @@ Remove-Module IdentityAuth* -Force -ErrorAction SilentlyContinue
 Import-Module .\IdentityAuth7.psd1 -Force
 ```
 
-### Session token not working with other scripts
+### Headers not working with other scripts
 
-**Cause:** Script expects string, module returns hashtable
+**Cause:** Incompatible script expecting different format
 
-**Solution:** Pass `.Authorization` property:
+**Solution:** Ensure script supports Privilege Cloud authentication:
 
 ```powershell
 $headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL $PCloudURL
-.\OtherScript.ps1 -logonToken $headers.Authorization  # Pass string value
+.\Script.ps1 -logonToken $headers -PVWAURL $PCloudURL
 ```
+
+**Note:** All scripts in epv-api-scripts repository accept the hashtable format.
 
 ---
 
