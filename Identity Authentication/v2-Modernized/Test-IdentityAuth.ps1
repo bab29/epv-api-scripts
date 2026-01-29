@@ -144,7 +144,7 @@ function Test-OAuth {
         Write-Host "  Testing OAuth authentication..."
         Write-Host "  Using normalized PCloud URL: $pcloudUrl" -ForegroundColor Gray
         Write-Host "  Attempting auto-discovery of Identity URL..." -ForegroundColor Gray
-        
+
         # Try auto-derivation first
         try {
             $headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL $pcloudUrl -Verbose
@@ -154,9 +154,9 @@ function Test-OAuth {
             Write-Host "  Auto-discovery failed: $($_.Exception.Message)" -ForegroundColor Yellow
             Write-Host "  Please provide Identity URL manually." -ForegroundColor Yellow
             Write-Host ""
-            
+
             $identityUrlInput = Read-Host "Enter Identity URL (e.g., https://abc1234.id.cyberark.cloud)"
-            
+
             if ($identityUrlInput) {
                 $identityUrl = $identityUrlInput.TrimEnd('/')
                 Write-Host "  Using provided Identity URL: $identityUrl" -ForegroundColor Gray
@@ -165,18 +165,18 @@ function Test-OAuth {
                 throw "Identity URL is required but was not provided"
             }
         }
-        
+
         # Validate headers
         if ($headers -and $headers.Authorization -and $headers['X-IDAP-NATIVE-CLIENT']) {
             Write-TestResult "OAuth Authentication" $true
             Write-Host "    Authorization: $($headers.Authorization.Substring(0, 50))..." -ForegroundColor Gray
             Write-Host "    X-IDAP-NATIVE-CLIENT: $($headers['X-IDAP-NATIVE-CLIENT'])" -ForegroundColor Gray
-            
+
             # Test token caching
             Write-Host ""
             Write-Host "  Testing token caching..."
             $headers2 = Get-IdentityHeader -OAuthCreds $creds -PCloudURL $pcloudUrl
-            
+
             if ($headers.Authorization -eq $headers2.Authorization) {
                 Write-TestResult "Token Caching" $true
                 Write-Host "    Same token returned (cached successfully)" -ForegroundColor Gray
@@ -360,7 +360,8 @@ function Test-ErrorHandling {
         $badCreds = New-Object PSCredential('invalid', (ConvertTo-SecureString 'invalid' -AsPlainText -Force))
 
         try {
-            $null = Get-IdentityHeader -OAuthCreds $badCreds -PCloudURL "https://invalid.cyberark.cloud"
+            # Use a real PCloud URL but with invalid credentials - OAuth call will fail
+            $null = Get-IdentityHeader -OAuthCreds $badCreds -PCloudURL "https://subdomain.privilegecloud.cyberark.cloud/PasswordVault"
             Write-TestResult "Invalid Credentials Error" $false "Should have thrown error"
         } catch {
             Write-TestResult "Invalid Credentials Error" $true
