@@ -123,8 +123,19 @@ function Test-OAuth {
     # Get PCloud URL
     $pcloudUrl = Read-Host "Enter PCloud URL (e.g., https://subdomain.cyberark.cloud)"
     
+    # Normalize the URL for consistent testing
+    $pcloudUrl = $pcloudUrl.TrimEnd('/')
+    if (-not $pcloudUrl.EndsWith('/PasswordVault')) {
+        if ($pcloudUrl -notmatch 'privilegecloud') {
+            $pcloudUrl = $pcloudUrl -replace '\.cyberark\.cloud.*', '.privilegecloud.cyberark.cloud/PasswordVault'
+        } else {
+            $pcloudUrl = "$pcloudUrl/PasswordVault"
+        }
+    }
+    
     try {
         Write-Host "  Testing OAuth authentication..."
+        Write-Host "  Using normalized URL: $pcloudUrl" -ForegroundColor Gray
         $headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL $pcloudUrl -Verbose
         
         # Validate headers
@@ -184,22 +195,8 @@ function Test-PCloudAPI {
     Write-Host "This test validates API calls using the authentication headers."
     Write-Host ""
     
-    # Normalize PVWA URL - handle various input formats
-    $pvwaUrl = $Context.PCloudURL
-    
-    # Remove trailing slashes
-    $pvwaUrl = $pvwaUrl.TrimEnd('/')
-    
-    # If URL already has /PasswordVault, keep it
-    if (-not $pvwaUrl.EndsWith('/PasswordVault')) {
-        # Check if it already has privilegecloud in the domain
-        if ($pvwaUrl -match 'privilegecloud\.cyberark\.cloud') {
-            $pvwaUrl = "$pvwaUrl/PasswordVault"
-        } else {
-            # Convert base URL to privilegecloud URL
-            $pvwaUrl = $pvwaUrl -replace '\.cyberark\.cloud.*', '.privilegecloud.cyberark.cloud/PasswordVault'
-        }
-    }
+    # Use the normalized URL directly from context (already normalized in Test-OAuth)
+    $pvwaUrl = $Context.PCloudURL.TrimEnd('/')
     
     Write-Host "  Using PVWA URL: $pvwaUrl" -ForegroundColor Gray
     Write-Host ""
