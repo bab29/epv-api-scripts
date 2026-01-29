@@ -1,7 +1,7 @@
 # CyberArk Identity Authentication Module
 
-**Status:** ✅ Production Ready  
-**Version:** 2.0.0  
+**Status:** ✅ Production Ready
+**Version:** 2.0.0
 **PowerShell Compatibility:** 5.1+ (IdentityAuth.psm1) | 7.0+ (IdentityAuth7.psm1)
 
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B%20%7C%207.0%2B-blue)](https://github.com/PowerShell/PowerShell)
@@ -18,7 +18,7 @@ PowerShell module for authenticating to CyberArk Identity Security Platform with
   - Username/Password
   - MFA (OTP, Push notifications, SMS, Email)
   - OOBAUTHPIN (SAML + PIN)
-  
+
 - ✅ **Session Management**
   - Automatic token caching
   - Token expiry detection
@@ -344,5 +344,5 @@ For issues and feature requests, please open an issue in the GitHub repository.
 
 ---
 
-**Last Updated:** 2026-01-28  
+**Last Updated:** 2026-01-28
 **Version:** 2.0.0

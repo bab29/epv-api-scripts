@@ -270,7 +270,7 @@ Invoke-Pester -Path .\Tests\Pester\Get-IdentityHeader.Tests.ps1
 
 The module is built from source files in the GitHub repository. Each version (PS5.1 and PS7) has:
 - Private helper functions
-- Public exported functions  
+- Public exported functions
 - PS7 also includes classes and enums
 
 Build scripts combine all source files into single .psm1 files for distribution.
