@@ -1,0 +1,148 @@
+# GitHub Actions Workflow for IdentityAuth Module
+#
+# This workflow:
+# 1. Runs PSScriptAnalyzer on all PowerShell files
+# 2. Runs Pester tests (unit tests only)
+# 3. Builds both PS5.1 and PS7 modules
+# 4. Creates release artifacts
+
+name: Build and Test
+
+on:
+  push:
+    branches: [ main, develop, IdentityAuthvUpdateForOOBAUTHPIN ]
+    paths:
+      - 'Identity Authentication/v2-Modernized/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'Identity Authentication/v2-Modernized/**'
+
+defaults:
+  run:
+    shell: pwsh
+    working-directory: 'Identity Authentication/v2-Modernized'
+
+jobs:
+  analyze:
+    name: PSScriptAnalyzer
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install PSScriptAnalyzer
+        run: |
+          Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser
+      
+      - name: Run PSScriptAnalyzer
+        run: |
+          $results = Invoke-ScriptAnalyzer -Path . -Settings .\PSScriptAnalyzerSettings.psd1 -Recurse
+          if ($results) {
+            $results | Format-Table -AutoSize
+            throw "PSScriptAnalyzer found $($results.Count) issue(s)"
+          } else {
+            Write-Host "✅ PSScriptAnalyzer: ZERO VIOLATIONS" -ForegroundColor Green
+          }
+
+  test-unit:
+    name: Unit Tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ windows-latest, ubuntu-latest, macos-latest ]
+        psversion: [ '5.1', '7.4' ]
+        exclude:
+          - os: ubuntu-latest
+            psversion: '5.1'
+          - os: macos-latest
+            psversion: '5.1'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install Pester
+        run: |
+          Install-Module -Name Pester -MinimumVersion 5.0.0 -Force -Scope CurrentUser
+      
+      - name: Run Unit Tests
+        run: |
+          $config = New-PesterConfiguration
+          $config.Run.Path = '.\Tests\Pester\Get-IdentityHeader.Tests.ps1'
+          $config.Output.Verbosity = 'Detailed'
+          $config.TestResult.Enabled = $true
+          $config.TestResult.OutputPath = 'test-results.xml'
+          
+          Invoke-Pester -Configuration $config
+      
+      - name: Upload Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}-ps${{ matrix.psversion }}
+          path: 'Identity Authentication/v2-Modernized/test-results.xml'
+
+  build:
+    name: Build Module
+    runs-on: windows-latest
+    needs: [ analyze, test-unit ]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Build PS5.1 Module
+        run: |
+          .\Build\Build-PS51Module.ps1
+      
+      - name: Build PS7 Module
+        run: |
+          .\Build\Build-PS7Module.ps1
+      
+      - name: Test Module Import
+        run: |
+          Import-Module .\Distribution\IdentityAuth\IdentityAuth.psd1 -Force
+          $module = Get-Module IdentityAuth
+          Write-Host "✅ Module: $($module.Name) v$($module.Version)" -ForegroundColor Green
+      
+      - name: Create Release Archive
+        run: |
+          Compress-Archive -Path .\Distribution\IdentityAuth -DestinationPath IdentityAuth-PS51.zip
+          Compress-Archive -Path .\Distribution\IdentityAuth-PS7 -DestinationPath IdentityAuth-PS7.zip
+      
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: module-artifacts
+          path: |
+            Identity Authentication/v2-Modernized/IdentityAuth-PS51.zip
+            Identity Authentication/v2-Modernized/IdentityAuth-PS7.zip
+
+  # Integration tests only run on protected branches with secrets
+  test-integration:
+    name: Integration Tests
+    runs-on: windows-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    environment: integration-test
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Install Pester
+        run: |
+          Install-Module -Name Pester -MinimumVersion 5.0.0 -Force -Scope CurrentUser
+      
+      - name: Run Integration Tests
+        env:
+          TEST_OAUTH_CLIENTID: ${{ secrets.TEST_OAUTH_CLIENTID }}
+          TEST_OAUTH_SECRET: ${{ secrets.TEST_OAUTH_SECRET }}
+          TEST_PCLOUD_URL: ${{ secrets.TEST_PCLOUD_URL }}
+        run: |
+          $config = New-PesterConfiguration
+          $config.Run.Path = '.\Tests\Pester\Integration.Tests.ps1'
+          $config.Filter.Tag = 'Integration'
+          $config.Output.Verbosity = 'Detailed'
+          
+          Invoke-Pester -Configuration $config
