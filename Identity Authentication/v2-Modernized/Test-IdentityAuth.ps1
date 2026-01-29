@@ -368,7 +368,7 @@ function Test-ErrorHandling {
             }
             
             Write-Host "    Testing with URL: $testUrl" -ForegroundColor Gray
-            $null = Get-IdentityHeader -OAuthCreds $badCreds -PCloudURL $testUrl
+            $null = Get-IdentityHeader -OAuthCreds $badCreds -PCloudURL $testUrl -ErrorAction Stop
             Write-TestResult "Invalid Credentials Error" $false "Should have thrown error"
         } catch {
             Write-TestResult "Invalid Credentials Error" $true
