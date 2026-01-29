@@ -357,11 +357,18 @@ function Test-ErrorHandling {
 
     try {
         Write-Host "  Testing invalid OAuth credentials..."
-        $badCreds = New-Object PSCredential('invalid', (ConvertTo-SecureString 'invalid' -AsPlainText -Force))
+        $badCreds = New-Object PSCredential('invalid-client-id', (ConvertTo-SecureString 'invalid-secret' -AsPlainText -Force))
 
         try {
-            # Use a real PCloud URL but with invalid credentials - OAuth call will fail
-            $null = Get-IdentityHeader -OAuthCreds $badCreds -PCloudURL "https://subdomain.privilegecloud.cyberark.cloud/PasswordVault"
+            # Use the actual tenant from context if available, otherwise use a known public tenant
+            $testUrl = if ($script:TestContext.PCloudURL) { 
+                $script:TestContext.PCloudURL 
+            } else { 
+                "https://serviceslab.privilegecloud.cyberark.cloud/PasswordVault" 
+            }
+            
+            Write-Host "    Testing with URL: $testUrl" -ForegroundColor Gray
+            $null = Get-IdentityHeader -OAuthCreds $badCreds -PCloudURL $testUrl
             Write-TestResult "Invalid Credentials Error" $false "Should have thrown error"
         } catch {
             Write-TestResult "Invalid Credentials Error" $true
