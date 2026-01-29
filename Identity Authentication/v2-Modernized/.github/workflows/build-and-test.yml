@@ -124,7 +124,6 @@ jobs:
     runs-on: windows-latest
     needs: build
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
-    environment: integration-test
 
     steps:
       - name: Checkout code

@@ -470,12 +470,14 @@ v2-Modernized/
 ├── PS5.1/                             # PowerShell 5.1 compatible module (SOURCE)
 │   ├── IdentityAuth.psm1              # Main module loader (dot-sources all .ps1 files)
 │   ├── IdentityAuth.psd1              # Module manifest
-│   ├── Private/                       # Private helper functions
+│   ├── Private/                       # Private helper functions (one function per file)
+│   │   ├── ConvertFrom-SessionToHeaders.ps1
 │   │   ├── Format-Token.ps1
-│   │   ├── Invoke-Rest.ps1
 │   │   ├── Invoke-AdvancedAuthBody.ps1
 │   │   ├── Invoke-Challenge.ps1
-│   │   └── SessionHelpers.ps1
+│   │   ├── Invoke-Rest.ps1
+│   │   ├── New-IdentitySession.ps1
+│   │   └── Update-IdentitySession.ps1
 │   ├── Public/                        # Exported public functions
 │   │   ├── Get-IdentityHeader.ps1
 │   │   ├── Get-IdentityURL.ps1
@@ -500,12 +502,14 @@ v2-Modernized/
 │   │   ├── ChallengeType.ps1
 │   │   ├── MechanismType.ps1
 │   │   └── SessionState.ps1
-│   ├── Private/                       # Private helper functions
+│   ├── Private/                       # Private helper functions (one function per file)
+│   │   ├── ConvertFrom-SessionToHeaders.ps1
 │   │   ├── Format-Token.ps1
-│   │   ├── Invoke-Rest.ps1
 │   │   ├── Invoke-AdvancedAuthBody.ps1
 │   │   ├── Invoke-Challenge.ps1
-│   │   └── SessionHelpers.ps1
+│   │   ├── Invoke-Rest.ps1
+│   │   ├── New-IdentitySession.ps1
+│   │   └── Update-IdentitySession.ps1
 │   ├── Public/                        # Exported public functions
 │   │   ├── Get-IdentityHeader.ps1
 │   │   ├── Get-IdentityURL.ps1

@@ -1,11 +1,11 @@
-#Requires -Version 5.1
+#Requires -Version 7.0
 
 <#
 .SYNOPSIS
-    IdentityAuth module loader - PowerShell 5.1
+    IdentityAuth7 module loader - PowerShell 7+
 
 .DESCRIPTION
-    Main module file that dot-sources all Private and Public functions.
+    Main module file that dot-sources all Enums, Classes, Private and Public functions.
     This file is used during development. Build process combines all into single .psm1.
 
 .NOTES

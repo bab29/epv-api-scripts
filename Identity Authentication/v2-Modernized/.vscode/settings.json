@@ -1,0 +1,19 @@
+{
+    "powershell.codeFormatting.preset": "OTBS",
+    "powershell.codeFormatting.openBraceOnSameLine": true,
+    "powershell.codeFormatting.newLineAfterOpenBrace": true,
+    "powershell.codeFormatting.newLineAfterCloseBrace": true,
+    "powershell.codeFormatting.whitespaceBeforeOpenBrace": true,
+    "powershell.codeFormatting.whitespaceBeforeOpenParen": true,
+    "powershell.codeFormatting.whitespaceAroundOperator": true,
+    "powershell.codeFormatting.whitespaceAfterSeparator": true,
+    "powershell.codeFormatting.ignoreOneLineBlock": true,
+    "powershell.codeFormatting.alignPropertyValuePairs": true,
+    "powershell.scriptAnalysis.enable": true,
+    "powershell.scriptAnalysis.settingsPath": "PSScriptAnalyzerSettings.psd1",
+    "files.encoding": "utf8bom",
+    "files.eol": "\n",
+    "[powershell]": {
+        "files.encoding": "utf8bom"
+    }
+}

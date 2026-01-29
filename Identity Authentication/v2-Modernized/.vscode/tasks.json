@@ -2,6 +2,30 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "Build: All Modules",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "${workspaceFolder}/Identity Authentication/v2-Modernized/Build/Build-Module.ps1",
+                "-Version",
+                "All"
+            ],
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        {
             "label": "Build: PS5.1 Module",
             "type": "shell",
             "command": "pwsh",
@@ -10,13 +34,12 @@
                 "-ExecutionPolicy",
                 "Bypass",
                 "-File",
-                "${workspaceFolder}/Identity Authentication/v2-Modernized/Build/Build-PS51Module.ps1"
+                "${workspaceFolder}/Identity Authentication/v2-Modernized/Build/Build-Module.ps1",
+                "-Version",
+                "PS5.1"
             ],
             "problemMatcher": [],
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
+            "group": "build",
             "presentation": {
                 "reveal": "always",
                 "panel": "shared",
@@ -32,7 +55,9 @@
                 "-ExecutionPolicy",
                 "Bypass",
                 "-File",
-                "${workspaceFolder}/Identity Authentication/v2-Modernized/Build/Build-PS7Module.ps1"
+                "${workspaceFolder}/Identity Authentication/v2-Modernized/Build/Build-Module.ps1",
+                "-Version",
+                "PS7"
             ],
             "problemMatcher": [],
             "group": "build",
@@ -41,15 +66,6 @@
                 "panel": "shared",
                 "clear": true
             }
-        },
-        {
-            "label": "Build: All Modules",
-            "dependsOn": [
-                "Build: PS5.1 Module",
-                "Build: PS7 Module"
-            ],
-            "problemMatcher": [],
-            "group": "build"
         },
         {
             "label": "Test: Run Pester Tests",

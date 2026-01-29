@@ -1,0 +1,8 @@
+TOPIC
+    about_IdentityAuth
+
+SHORT DESCRIPTION
+    Authentication module for CyberArk Identity Security Platform Shared Services (ISPSS)
+
+LONG DESCRIPTION
+    TODO: Complete help documentation

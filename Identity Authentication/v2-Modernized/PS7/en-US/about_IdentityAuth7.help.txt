@@ -1,0 +1,8 @@
+TOPIC
+    about_IdentityAuth7
+
+SHORT DESCRIPTION
+    Authentication module for CyberArk Identity Security Platform Shared Services (ISPSS) - PowerShell 7+
+
+LONG DESCRIPTION
+    TODO: Complete help documentation
