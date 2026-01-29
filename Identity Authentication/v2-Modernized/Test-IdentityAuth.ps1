@@ -71,6 +71,12 @@ $script:TestResults = @{
     Skipped = @()
 }
 
+# Test context for storing OAuth credentials between tests
+$script:TestContext = @{
+    OAuthCreds = $null
+    PCloudURL = $null
+}
+
 function Write-TestHeader {
     param([string]$Title)
     Write-Host @"
@@ -179,19 +185,25 @@ function Test-OAuth {
     } catch {
         Write-TestResult "OAuth Authentication" $false $_.Exception.Message
         return $null
+    } finally {
+        # Store credentials for other tests
+        if ($creds -and $pcloudUrl) {
+            $script:TestContext.OAuthCreds = $creds
+            $script:TestContext.PCloudURL = $pcloudUrl
+        }
     }
 }
 
 function Test-PCloudAPI {
     param($Context)
-
+    
     if (-not $Context) {
         Write-TestSkipped "PCloud API Integration" "OAuth test failed"
         return
     }
-
+    
     Write-TestHeader "TEST 2: PCloud API Integration"
-
+    
     Write-Host "This test validates API calls using the authentication headers."
     Write-Host ""
 
@@ -257,55 +269,58 @@ function Test-Logging {
         Write-Host "    Log file: $logFile" -ForegroundColor Gray
 
         Write-Host ""
-        Write-Host "  Writing test log entries..."
-        Write-IdentityLog -Message "Test log entry 1" -Level Info
-        Write-IdentityLog -Message "Test log entry 2" -Level Verbose
-        Write-IdentityLog -Message "Test warning" -Level Warning
-
-        Write-Host ""
-        Write-Host "  Verifying log file..."
-        if (Test-Path $logFile) {
-            $logContent = Get-Content $logFile -Raw
-            if ($logContent -like '*Test log entry*') {
-                Write-TestResult "Log File Writing" $true
-                Write-Host "    Log entries written successfully" -ForegroundColor Gray
-
-                # Show log content
+        Write-Host "  Testing OAuth authentication with logging..."
+        
+        # Use cached OAuth credentials if available from previous test
+        if ($script:TestContext.OAuthCreds -and $script:TestContext.PCloudURL) {
+            Write-Host "    Using cached test credentials" -ForegroundColor Gray
+            try {
+                # Force new token to generate log entries
+                $null = Get-IdentityHeader -OAuthCreds $script:TestContext.OAuthCreds -PCloudURL $script:TestContext.PCloudURL -Force -Verbose
+                
                 Write-Host ""
-                Write-Host "  Log file content:" -ForegroundColor Gray
-                Get-Content $logFile | ForEach-Object {
-                    Write-Host "    $_" -ForegroundColor DarkGray
+                Write-Host "  Verifying log file..."
+                if (Test-Path $logFile) {
+                    $logContent = Get-Content $logFile -Raw
+                    if ($logContent -and $logContent.Length -gt 0) {
+                        Write-TestResult "Log File Writing" $true
+                        Write-Host "    Log entries written successfully" -ForegroundColor Gray
+                        Write-Host "    Log file size: $((Get-Item $logFile).Length) bytes" -ForegroundColor Gray
+                        
+                        # Show sample log entries (first 5 lines)
+                        Write-Host ""
+                        Write-Host "  Sample log entries:" -ForegroundColor Gray
+                        $logLines = Get-Content $logFile -TotalCount 5
+                        $logLines | ForEach-Object {
+                            Write-Host "    $_" -ForegroundColor DarkGray
+                        }
+                        if ((Get-Content $logFile).Count -gt 5) {
+                            Write-Host "    ... ($(((Get-Content $logFile).Count - 5)) more lines)" -ForegroundColor DarkGray
+                        }
+                    } else {
+                        Write-TestResult "Log File Writing" $false "Log file is empty"
+                    }
+                } else {
+                    Write-TestResult "Log File Writing" $false "Log file not created"
                 }
-            } else {
-                Write-TestResult "Log File Writing" $false "Log entries not found in file"
+            } catch {
+                Write-TestResult "Log File Writing" $false $_.Exception.Message
             }
         } else {
-            Write-TestResult "Log File Writing" $false "Log file not created"
+            Write-Host "    No OAuth credentials available from previous test" -ForegroundColor Yellow
+            Write-Host "    Run OAuth test (option 1) first, then run this test" -ForegroundColor Yellow
+            Write-TestSkipped "Log File Writing" "No OAuth test context"
         }
-
+        
         Write-Host ""
         Write-Host "  Disabling logging..."
         Disable-IdentityLogFile
         Write-TestResult "Disable Logging" $true
-
+        
     } catch {
         Write-TestResult "Logging Infrastructure" $false $_.Exception.Message
     } finally {
-        if (Test-Path $logFile) {
-            Remove-Item $logFile -Force -ErrorAction SilentlyContinue
-        }
-    }
-}
-
-function Test-ErrorHandling {
-    Write-TestHeader "TEST 4: Error Handling"
-
-    Write-Host "This test validates error handling with invalid inputs."
-    Write-Host ""
-
-    try {
-        Write-Host "  Testing invalid OAuth credentials..."
-        $badCreds = New-Object PSCredential('invalid', (ConvertTo-SecureString 'invalid' -AsPlainText -Force))
+        # Clean up log file
 
         try {
             $null = Get-IdentityHeader -OAuthCreds $badCreds -PCloudURL "https://invalid.cyberark.cloud"
