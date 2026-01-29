@@ -164,6 +164,19 @@ function Test-OAuth {
             } else {
                 throw "Identity URL is required but was not provided"
             }
+        }
+        
+        # Validate headers
+        if ($headers -and $headers.Authorization -and $headers['X-IDAP-NATIVE-CLIENT']) {
+            Write-TestResult "OAuth Authentication" $true
+            Write-Host "    Authorization: $($headers.Authorization.Substring(0, 50))..." -ForegroundColor Gray
+            Write-Host "    X-IDAP-NATIVE-CLIENT: $($headers['X-IDAP-NATIVE-CLIENT'])" -ForegroundColor Gray
+            
+            # Test token caching
+            Write-Host ""
+            Write-Host "  Testing token caching..."
+            $headers2 = Get-IdentityHeader -OAuthCreds $creds -PCloudURL $pcloudUrl
+            
             if ($headers.Authorization -eq $headers2.Authorization) {
                 Write-TestResult "Token Caching" $true
                 Write-Host "    Same token returned (cached successfully)" -ForegroundColor Gray
