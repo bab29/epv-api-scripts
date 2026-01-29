@@ -61,7 +61,7 @@ $clientSecret = 'your-client-secret' | ConvertTo-SecureString -AsPlainText -Forc
 $oauthCreds = New-Object PSCredential($clientId, $clientSecret)
 
 # Authenticate and get token
-$headers = Get-IdentityHeader -OAuthCreds $oauthCreds -PCloudURL 'https://subdomain.cyberark.cloud'
+$headers = Get-IdentityHeader -OAuthCreds $oauthCreds -PCloudURL 'https://subdomain.privilegecloud.cyberark.cloud/PasswordVault'
 
 # Use headers with other scripts
 .\Accounts_Onboard_Utility.ps1 -logonToken $headers -PVWAURL $PCloudURL -CSVFile accounts.csv
@@ -73,18 +73,18 @@ $headers = Get-IdentityHeader -OAuthCreds $oauthCreds -PCloudURL 'https://subdom
 # Prompt for credentials
 $upCreds = Get-Credential -Message "Enter CyberArk credentials"
 
-# Authenticate with MFA prompts
-$headers = Get-IdentityHeader -UPCreds $upCreds -PCloudURL 'https://subdomain.cyberark.cloud'
+# Authenticate - flow handles MFA challenges automatically
+$headers = Get-IdentityHeader -UPCreds $upCreds -PCloudURL 'https://subdomain.privilegecloud.cyberark.cloud/PasswordVault'
 ```
 
-#### OOBAUTHPIN (SAML + PIN)
+#### Interactive Authentication (Identity Username)
 
 ```powershell
-# Authenticate with SAML + PIN
-$headers = Get-IdentityHeader -IdentityUserName 'user@company.com' -PCloudURL 'https://subdomain.cyberark.cloud'
+# Authenticate with Identity Username (prompts for password/challenges)
+$headers = Get-IdentityHeader -IdentityUserName 'user@company.com' -PCloudURL 'https://subdomain.privilegecloud.cyberark.cloud/PasswordVault'
 
-# If PIN is already known
-$headers = Get-IdentityHeader -IdentityUserName 'user@company.com' -PIN '123456' -PCloudURL 'https://subdomain.cyberark.cloud'
+# Optionally provide PIN for OOBAUTHPIN flow
+$headers = Get-IdentityHeader -IdentityUserName 'user@company.com' -PIN '123456' -PCloudURL 'https://subdomain.privilegecloud.cyberark.cloud/PasswordVault'
 ```
 
 ---
@@ -101,29 +101,37 @@ $headers = Get-IdentityHeader -OAuthCreds $oauthCreds -PCloudURL $PCloudURL
 
 **Returns:** Hashtable with `Authorization` and `X-IDAP-NATIVE-CLIENT` headers
 
-### 2. Username/Password with MFA
-Best for: Interactive sessions with MFA
+### 2. Interactive Authentication Flow
+Best for: Interactive sessions with username/password authentication
 
+The module provides a **single interactive authentication flow** that automatically handles all challenges:
+- Username/Password
+- MFA (OTP, Push notifications, SMS, Email)
+- OOBAUTHPIN (SAML + PIN)
+
+**Two ways to authenticate:**
+
+**Option A: Pass PSCredential (username + password)**
 ```powershell
 $upCreds = Get-Credential
 $headers = Get-IdentityHeader -UPCreds $upCreds -PCloudURL $PCloudURL
 ```
 
-**Supports:** OTP codes, Push notifications, SMS, Email verification
-
-### 3. OOBAUTHPIN (SAML + PIN)
-Best for: SAML-configured tenants requiring PIN verification
-
+**Option B: Pass Identity Username (prompts for password)**
 ```powershell
 $headers = Get-IdentityHeader -IdentityUserName 'user@domain.com' -PCloudURL $PCloudURL
 ```
 
-**Flow:**
+**The flow automatically detects and handles:**
+- Standard password authentication
+- MFA challenges (OTP/Push/SMS/Email)
+- OOBAUTHPIN (SAML redirect + PIN entry)
+
+**For OOBAUTHPIN, the module:**
 1. Displays SAML authentication URL
-2. User completes SAML login in browser
-3. PIN code received via email/SMS
-4. User enters PIN in PowerShell prompt
-5. Returns authentication headers
+2. Waits for user to complete SAML login in browser
+3. Prompts for PIN code received via email/SMS
+4. Returns authentication headers
 
 ---
 
@@ -218,10 +226,10 @@ Import-Module IdentityAuth7
 
 # Authenticate to Identity
 $oauthCreds = Get-Credential -Message "Enter OAuth credentials"
-$headers = Get-IdentityHeader -OAuthCreds $oauthCreds -PCloudURL 'https://subdomain.cyberark.cloud'
+$headers = Get-IdentityHeader -OAuthCreds $oauthCreds -PCloudURL 'https://subdomain.privilegecloud.cyberark.cloud/PasswordVault'
 
 # Use with EPV-API-Common functions
-$pvwaSession = New-PASSession -BaseURI 'https://subdomain.cyberark.cloud' -IdentityHeaders $headers
+$pvwaSession = New-PASSession -BaseURI 'https://subdomain.privilegecloud.cyberark.cloud/PasswordVault' -IdentityHeaders $headers
 Get-PASAccount -search "admin"
 ```
 
@@ -229,11 +237,11 @@ Get-PASAccount -search "admin"
 
 ```powershell
 # Authenticate once
-$headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL 'https://subdomain.cyberark.cloud'
+$headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL 'https://subdomain.privilegecloud.cyberark.cloud/PasswordVault'
 
 # Use token with Accounts Onboard Utility
 .\Accounts_Onboard_Utility.ps1 `
-    -PVWAURL 'https://subdomain.cyberark.cloud' `
+    -PVWAURL 'https://subdomain.privilegecloud.cyberark.cloud/PasswordVault' `
     -logonToken $headers.Authorization `
     -CSVFile "accounts.csv"
 ```
@@ -242,7 +250,7 @@ $headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL 'https://subdomain.c
 
 ```powershell
 $upCreds = Get-Credential -Message "Enter username and password"
-$headers = Get-IdentityHeader -UPCreds $upCreds -PCloudURL 'https://subdomain.cyberark.cloud'
+$headers = Get-IdentityHeader -UPCreds $upCreds -PCloudURL 'https://subdomain.privilegecloud.cyberark.cloud/PasswordVault'
 
 # Output:
 # Challenge 1
@@ -258,7 +266,7 @@ $headers = Get-IdentityHeader -UPCreds $upCreds -PCloudURL 'https://subdomain.cy
 ```powershell
 # Useful for automation when PIN is retrieved programmatically
 $pin = Get-PINFromSMS  # Your custom function to retrieve PIN
-$headers = Get-IdentityHeader -IdentityUserName 'user@company.com' -PIN $pin -PCloudURL 'https://subdomain.cyberark.cloud'
+$headers = Get-IdentityHeader -IdentityUserName 'user@company.com' -PIN $pin -PCloudURL 'https://subdomain.privilegecloud.cyberark.cloud/PasswordVault'
 ```
 
 ---
@@ -273,7 +281,7 @@ $headers = Get-IdentityHeader -IdentityUserName 'user@company.com' -PIN $pin -PC
 
 ```powershell
 $headers = Get-IdentityHeader -OAuthCreds $creds `
-    -PCloudURL 'https://subdomain.cyberark.cloud' `
+    -PCloudURL 'https://subdomain.privilegecloud.cyberark.cloud/PasswordVault' `
     -IdentityTenantURL 'https://abc123.id.cyberark.cloud'
 ```
 

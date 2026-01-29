@@ -244,7 +244,7 @@ Use environment variables for credentials:
 BeforeAll {
     $env:TEST_OAUTH_CLIENTID = "client_id"
     $env:TEST_OAUTH_SECRET = "secret"
-    $env:TEST_PCLOUD_URL = "https://tenant.cyberark.cloud"
+    $env:TEST_PCLOUD_URL = "https://subdomain.privilegecloud.cyberark.cloud/PasswordVault"
 }
 ```
 

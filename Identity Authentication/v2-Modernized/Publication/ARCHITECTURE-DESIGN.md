@@ -12,98 +12,8 @@
 
 ## Process Flow Diagrams
 
-### 1. OOBAUTHPIN Authentication Flow
 
-```mermaid
-flowchart TD
-    Start([User calls Get-IdentityHeader]) --> SetHeaders[Set Headers:<br/>OobIdPAuth=true<br/>X-IDAP-NATIVE-CLIENT=true]
-    SetHeaders --> StartAuth[POST /Security/StartAuthentication<br/>Body: User, Version]
-    StartAuth --> CheckShortURL{IdpRedirectShortUrl<br/>present?}
-
-    CheckShortURL -->|Yes| ExtractData[Extract:<br/>- IdpRedirectShortUrl<br/>- IdpLoginSessionId<br/>- SessionId]
-    CheckShortURL -->|No| FallbackFlow[Fall back to<br/>standard challenge flow]
-
-    ExtractData --> DisplayInstructions[Display formatted instructions:<br/>Steps to open URL<br/>Complete SAML<br/>Receive PIN]
-    DisplayInstructions --> CheckPINParam{PIN parameter<br/>provided?}
-
-    CheckPINParam -->|Yes| UsePIN[Use provided PIN]
-    CheckPINParam -->|No| PromptPIN[Prompt user for PIN]
-
-    PromptPIN --> ValidatePIN{PIN valid<br/>numeric?}
-    ValidatePIN -->|No| PromptPIN
-    ValidatePIN -->|Yes| UsePIN
-
-    UsePIN --> SubmitPIN[POST /Security/AdvanceAuthentication<br/>SessionId: IdpLoginSessionId<br/>MechanismId: OOBAUTHPIN<br/>Action: Answer<br/>Answer: PIN]
-
-    SubmitPIN --> CheckResponse{Response<br/>status?}
-    CheckResponse -->|Success + Token| ExtractToken[Extract token from response]
-    CheckResponse -->|Success + More Challenges| NextChallenge[Recursively call<br/>Invoke-Challenge]
-    CheckResponse -->|Error| AuthFailed[Throw authentication error]
-
-    NextChallenge --> ProcessChallenge[Process additional challenge]
-    ProcessChallenge --> CheckToken{Token<br/>received?}
-    CheckToken -->|Yes| ExtractToken
-    CheckToken -->|No| AuthFailed
-
-    ExtractToken --> StoreSession[Store in $script:CurrentSession:<br/>- Token<br/>- TokenExpiry<br/>- IdentityURL<br/>- AuthMethod: OOBAUTHPIN]
-    StoreSession --> FormatHeaders[Format return headers:<br/>Authorization: Bearer token<br/>X-IDAP-NATIVE-CLIENT: true]
-    FormatHeaders --> ReturnHeaders[Return Dictionary]
-
-    FallbackFlow --> StandardFlow[Process via<br/>Invoke-Challenge]
-    StandardFlow --> End
-    ReturnHeaders --> End
-    AuthFailed --> End
-```
-
-### 2. OAuth Authentication Flow
-
-```mermaid
-flowchart TD
-    Start([OAuth Authentication]) --> CheckSession{ForceNewSession<br/>or no session?}
-    CheckSession -->|Use existing| CheckExpiry{Token<br/>expired?}
-    CheckExpiry -->|No| ReturnExisting[Return current session]
-    CheckExpiry -->|Yes| AttemptRefresh[Attempt auto-refresh]
-
-    CheckSession -->|New session| ValidateCreds{OAuth credentials<br/>provided?}
-    ValidateCreds -->|No| ErrorNoCreds[Throw: Credentials required]
-    ValidateCreds -->|Yes| ExtractCreds[Extract ClientID and ClientSecret<br/>from PSCredential/params]
-
-    ExtractCreds --> GetIdentityURL[Get Identity URL<br/>from PCloud URL]
-    GetIdentityURL --> BuildRequest[Build OAuth request:<br/>grant_type=client_credentials<br/>client_id=ClientID<br/>client_secret=ClientSecret]
-
-    BuildRequest --> PostRequest["POST /OAuth2/Token/ClientId<br/>Content-Type: application/x-www-form-urlencoded"]
-    PostRequest --> CheckResponse{HTTP<br/>Status?}
-
-    CheckResponse -->|200 OK| ParseToken[Parse response:<br/>- access_token<br/>- token_type<br/>- expires_in]
-    CheckResponse -->|401| ErrorInvalidCreds[Throw: Invalid credentials]
-    CheckResponse -->|Other| ErrorAPI[Throw: API error]
-
-    ParseToken --> CalculateExpiry[Calculate expiry:<br/>now + expires_in seconds]
-    CalculateExpiry --> StoreSession[Store in $script:CurrentSession:<br/>- Token<br/>- TokenExpiry<br/>- IdentityURL<br/>- PCloudURL<br/>- AuthMethod: OAuth<br/>- StoredCredentials]
-
-    StoreSession --> BuildHeader[Build authorization header:<br/>Bearer access_token]
-    BuildHeader --> BuildDict[Build Dictionary:<br/>Authorization<br/>X-IDAP-NATIVE-CLIENT]
-    BuildDict --> ReturnStandard[Return Dictionary]
-
-    AttemptRefresh --> CheckStoredCreds{OAuth creds<br/>in session?}
-    CheckStoredCreds -->|Yes| ReAuth[Re-authenticate<br/>with stored creds]
-    CheckStoredCreds -->|No| ErrorNoRefresh[Throw: Cannot auto-refresh]
-
-    ReAuth --> CheckReAuthSuccess{Re-auth<br/>success?}
-    CheckReAuthSuccess -->|Yes| UpdateSession[Update session:<br/>- New token<br/>- New expiry<br/>- Increment RefreshCount]
-    CheckReAuthSuccess -->|No| ErrorReAuthFailed[Throw: Refresh failed]
-
-    UpdateSession --> BuildDict
-    ReturnExisting --> End([End])
-    ReturnStandard --> End
-    ErrorNoCreds --> End
-    ErrorInvalidCreds --> End
-    ErrorAPI --> End
-    ErrorNoRefresh --> End
-    ErrorReAuthFailed --> End
-```
-
-### 3. Standard Challenge Flow (UP/OTP/Push)
+### 1. Standard Challenge Flow (UP/OTP/Push)
 
 ```mermaid
 flowchart TD
@@ -170,6 +80,97 @@ flowchart TD
     ReturnHeaders --> End([End])
     AuthFailed --> End
     PushFailed --> End
+```
+
+### 2. OOBAUTHPIN Authentication Flow
+
+```mermaid
+flowchart TD
+    Start([User calls Get-IdentityHeader]) --> SetHeaders[Set Headers:<br/>OobIdPAuth=true<br/>X-IDAP-NATIVE-CLIENT=true]
+    SetHeaders --> StartAuth[POST /Security/StartAuthentication<br/>Body: User, Version]
+    StartAuth --> CheckShortURL{IdpRedirectShortUrl<br/>present?}
+
+    CheckShortURL -->|Yes| ExtractData[Extract:<br/>- IdpRedirectShortUrl<br/>- IdpLoginSessionId<br/>- SessionId]
+    CheckShortURL -->|No| FallbackFlow[Fall back to<br/>standard challenge flow]
+
+    ExtractData --> DisplayInstructions[Display formatted instructions:<br/>Steps to open URL<br/>Complete SAML<br/>Receive PIN]
+    DisplayInstructions --> CheckPINParam{PIN parameter<br/>provided?}
+
+    CheckPINParam -->|Yes| UsePIN[Use provided PIN]
+    CheckPINParam -->|No| PromptPIN[Prompt user for PIN]
+
+    PromptPIN --> ValidatePIN{PIN valid<br/>numeric?}
+    ValidatePIN -->|No| PromptPIN
+    ValidatePIN -->|Yes| UsePIN
+
+    UsePIN --> SubmitPIN[POST /Security/AdvanceAuthentication<br/>SessionId: IdpLoginSessionId<br/>MechanismId: OOBAUTHPIN<br/>Action: Answer<br/>Answer: PIN]
+
+    SubmitPIN --> CheckResponse{Response<br/>status?}
+    CheckResponse -->|Success + Token| ExtractToken[Extract token from response]
+    CheckResponse -->|Success + More Challenges| NextChallenge[Recursively call<br/>Invoke-Challenge]
+    CheckResponse -->|Error| AuthFailed[Throw authentication error]
+
+    NextChallenge --> ProcessChallenge[Process additional challenge]
+    ProcessChallenge --> CheckToken{Token<br/>received?}
+    CheckToken -->|Yes| ExtractToken
+    CheckToken -->|No| AuthFailed
+
+    ExtractToken --> StoreSession[Store in $script:CurrentSession:<br/>- Token<br/>- TokenExpiry<br/>- IdentityURL<br/>- AuthMethod: OOBAUTHPIN]
+    StoreSession --> FormatHeaders[Format return headers:<br/>Authorization: Bearer token<br/>X-IDAP-NATIVE-CLIENT: true]
+    FormatHeaders --> ReturnHeaders[Return Dictionary]
+
+    FallbackFlow --> StandardFlow[Process via<br/>Invoke-Challenge]
+    StandardFlow --> End
+    ReturnHeaders --> End
+    AuthFailed --> End
+```
+
+### 3. OAuth Authentication Flow
+
+```mermaid
+flowchart TD
+    Start([OAuth Authentication]) --> CheckSession{ForceNewSession<br/>or no session?}
+    CheckSession -->|Use existing| CheckExpiry{Token<br/>expired?}
+    CheckExpiry -->|No| ReturnExisting[Return current session]
+    CheckExpiry -->|Yes| AttemptRefresh[Attempt auto-refresh]
+
+    CheckSession -->|New session| ValidateCreds{OAuth credentials<br/>provided?}
+    ValidateCreds -->|No| ErrorNoCreds[Throw: Credentials required]
+    ValidateCreds -->|Yes| ExtractCreds[Extract ClientID and ClientSecret<br/>from PSCredential/params]
+
+    ExtractCreds --> GetIdentityURL[Get Identity URL<br/>from PCloud URL]
+    GetIdentityURL --> BuildRequest[Build OAuth request:<br/>grant_type=client_credentials<br/>client_id=ClientID<br/>client_secret=ClientSecret]
+
+    BuildRequest --> PostRequest["POST /OAuth2/Token/ClientId<br/>Content-Type: application/x-www-form-urlencoded"]
+    PostRequest --> CheckResponse{HTTP<br/>Status?}
+
+    CheckResponse -->|200 OK| ParseToken[Parse response:<br/>- access_token<br/>- token_type<br/>- expires_in]
+    CheckResponse -->|401| ErrorInvalidCreds[Throw: Invalid credentials]
+    CheckResponse -->|Other| ErrorAPI[Throw: API error]
+
+    ParseToken --> CalculateExpiry[Calculate expiry:<br/>now + expires_in seconds]
+    CalculateExpiry --> StoreSession[Store in $script:CurrentSession:<br/>- Token<br/>- TokenExpiry<br/>- IdentityURL<br/>- PCloudURL<br/>- AuthMethod: OAuth<br/>- StoredCredentials]
+
+    StoreSession --> BuildHeader[Build authorization header:<br/>Bearer access_token]
+    BuildHeader --> BuildDict[Build Dictionary:<br/>Authorization<br/>X-IDAP-NATIVE-CLIENT]
+    BuildDict --> ReturnStandard[Return Dictionary]
+
+    AttemptRefresh --> CheckStoredCreds{OAuth creds<br/>in session?}
+    CheckStoredCreds -->|Yes| ReAuth[Re-authenticate<br/>with stored creds]
+    CheckStoredCreds -->|No| ErrorNoRefresh[Throw: Cannot auto-refresh]
+
+    ReAuth --> CheckReAuthSuccess{Re-auth<br/>success?}
+    CheckReAuthSuccess -->|Yes| UpdateSession[Update session:<br/>- New token<br/>- New expiry<br/>- Increment RefreshCount]
+    CheckReAuthSuccess -->|No| ErrorReAuthFailed[Throw: Refresh failed]
+
+    UpdateSession --> BuildDict
+    ReturnExisting --> End([End])
+    ReturnStandard --> End
+    ErrorNoCreds --> End
+    ErrorInvalidCreds --> End
+    ErrorAPI --> End
+    ErrorNoRefresh --> End
+    ErrorReAuthFailed --> End
 ```
 
 ### 4. Token Refresh Logic Flow
@@ -727,7 +728,7 @@ class IdentitySession {
     [string]$Token                          # Bearer token
     [datetime]$TokenExpiry                  # Calculated expiry timestamp
     [string]$IdentityURL                    # https://tenant.id.cyberark.cloud
-    [string]$PCloudURL                      # https://tenant.privilegecloud.cyberark.cloud
+    [string]$PCloudURL                      # https://subdomain.privilegecloud.cyberark.cloud/PasswordVault
 
     # User and session metadata
     [string]$Username                       # Authenticated username
@@ -976,7 +977,7 @@ function Remove-IdentitySessionData {
 
 **Example:**
 ```powershell
-$headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL 'https://tenant.cyberark.cloud'
+$headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL 'https://subdomain.privilegecloud.cyberark.cloud/PasswordVault'
 # Returns:
 # Name                           Value
 # ----                           -----
@@ -987,13 +988,13 @@ $headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL 'https://tenant.cybe
 **Usage Example:**
 ```powershell
 # Get headers
-$headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL 'https://tenant.cyberark.cloud'
+$headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL 'https://subdomain.privilegecloud.cyberark.cloud/PasswordVault'
 
 # Use with Accounts_Onboard_Utility.ps1
-.\Accounts_Onboard_Utility.ps1 -PVWAURL 'https://tenant.privilegecloud.cyberark.cloud' -logonToken $headers
+.\Accounts_Onboard_Utility.ps1 -PVWAURL 'https://subdomain.privilegecloud.cyberark.cloud/PasswordVault' -logonToken $headers
 
 # Use with any Privilege Cloud API
-$accountsUrl = 'https://tenant.privilegecloud.cyberark.cloud/PasswordVault/API/Accounts'
+$accountsUrl = 'https://subdomain.privilegecloud.cyberark.cloud/PasswordVault/PasswordVault/API/Accounts'
 $accounts = Invoke-RestMethod -Uri $accountsUrl -Method Get -Headers $headers
 ```
 
@@ -1010,8 +1011,8 @@ $accounts = Invoke-RestMethod -Uri $accountsUrl -Method Get -Headers $headers
 The Accounts_Onboard_Utility.ps1 script accepts the hashtable returned by `Get-IdentityHeader`:
 
 ```powershell
-$headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL 'https://tenant.cyberark.cloud'
-$pvwaUrl = 'https://tenant.privilegecloud.cyberark.cloud'
+$headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL 'https://subdomain.privilegecloud.cyberark.cloud/PasswordVault'
+$pvwaUrl = 'https://subdomain.privilegecloud.cyberark.cloud/PasswordVault'
 
 # Pass the hashtable to -logonToken
 .\Accounts_Onboard_Utility.ps1 -PVWAURL $pvwaUrl -logonToken $headers
