@@ -13,14 +13,14 @@ function Get-AuthenticationMechanism {
     param(
         [Parameter(Mandatory)]
         [array]$Challenges,
-        
+
         [Parameter(Mandatory)]
         [ValidateSet('UP', 'Text', 'StartTextOob', 'StartOob')]
         [string]$AnswerType
     )
-    
+
     Write-Verbose "Searching for mechanism with AnswerType: $AnswerType"
-    
+
     foreach ($challenge in $Challenges) {
         foreach ($mechanism in $challenge.Mechanisms) {
             if ($mechanism.AnswerType -eq $AnswerType) {
@@ -29,7 +29,7 @@ function Get-AuthenticationMechanism {
             }
         }
     }
-    
+
     $availableTypes = $Challenges.Mechanisms.AnswerType | Select-Object -Unique
     throw "Mechanism with AnswerType '$AnswerType' not found. Available: $($availableTypes -join ', ')"
 }

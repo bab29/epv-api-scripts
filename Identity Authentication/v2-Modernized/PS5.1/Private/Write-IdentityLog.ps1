@@ -6,7 +6,7 @@
 .DESCRIPTION
     Provides structured logging with levels, timestamps, and optional file output.
     Supports Verbose, Warning, Error, and Debug streams.
-    
+
 .NOTES
     This is an internal function. Use Set-IdentityLogFile and Disable-IdentityLogFile
     to control logging behavior.
@@ -64,4 +64,3 @@ function Write-IdentityLog {
         }
     }
 }
-

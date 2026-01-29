@@ -13,35 +13,35 @@ function Invoke-UsernamePasswordAuth {
     param(
         [Parameter(Mandatory)]
         [string]$SessionId,
-        
+
         [Parameter(Mandatory)]
         [string]$MechanismId,
-        
+
         [Parameter(Mandatory)]
         [PSCredential]$Credential,
-        
+
         [Parameter(Mandatory)]
         [string]$IdentityTenantURL
     )
-    
+
     Write-Verbose "Authenticating with Username/Password"
-    
+
     $advanceAuthURL = "$IdentityTenantURL/Security/AdvanceAuthentication"
-    
+
     # Extract password
     $password = $Credential.GetNetworkCredential().Password
-    
+
     $body = @{
         SessionId   = $SessionId
         MechanismId = $MechanismId
         Action      = 'Answer'
         Answer      = $password
     } | ConvertTo-Json -Compress
-    
+
     try {
         Write-Verbose "Submitting password..."
         $response = Invoke-RestMethod -Uri $advanceAuthURL -Method Post -Body $body -ContentType 'application/json' -ErrorAction Stop
-        
+
         if ($response.success) {
             if ($response.Result.Auth) {
                 Write-Verbose "Username/Password authentication successful"

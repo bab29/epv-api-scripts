@@ -14,16 +14,16 @@ function Format-IdentityHeaders {
         [Parameter(Mandatory)]
         [string]$AccessToken
     )
-    
+
     Write-Verbose "Formatting Identity headers"
-    
+
     # Create headers hashtable
     $headers = @{
         Authorization           = "Bearer $AccessToken"
         'X-IDAP-NATIVE-CLIENT' = 'true'
     }
-    
+
     Write-Verbose "Headers created with Authorization and X-IDAP-NATIVE-CLIENT"
-    
+
     return $headers
 }

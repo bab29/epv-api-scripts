@@ -13,19 +13,19 @@ function Submit-OTPCode {
     param(
         [Parameter(Mandatory)]
         [string]$SessionId,
-        
+
         [Parameter(Mandatory)]
         [string]$MechanismId,
-        
+
         [Parameter(Mandatory)]
         [string]$OTPCode,
-        
+
         [Parameter(Mandatory)]
         [string]$IdentityTenantURL
     )
-    
+
     Write-Verbose "Submitting OTP code for verification"
-    
+
     $advanceAuthURL = "$IdentityTenantURL/Security/AdvanceAuthentication"
     $body = @{
         SessionId   = $SessionId
@@ -33,11 +33,11 @@ function Submit-OTPCode {
         Action      = 'Answer'
         Answer      = $OTPCode
     } | ConvertTo-Json -Compress
-    
+
     try {
         Write-Verbose "Verifying OTP..."
         $response = Invoke-RestMethod -Uri $advanceAuthURL -Method Post -Body $body -ContentType 'application/json' -ErrorAction Stop
-        
+
         if ($response.success) {
             if ($response.Result.Auth) {
                 Write-Verbose "OTP verification successful"
