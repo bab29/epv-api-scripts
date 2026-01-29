@@ -48,13 +48,18 @@ Identity Authentication/
 
 ### ✅ 4. Key Design Decisions Documented
 
-#### Return Value: Token String (Not Hashtable)
-**Before (v1 plan):** `$headers = Get-IdentityHeader ...` → Returns hashtable  
-**After (v2 finalized):** `$token = Get-IdentityHeader ...` → Returns string
+#### Return Value: Hashtable with Headers
+**Current behavior:** `$headers = Get-IdentityHeader ...` → Returns hashtable  
+**v2 maintains:** Same hashtable structure with Authorization and X-IDAP-NATIVE-CLIENT keys
 
-**Why:** Matches existing usage pattern:
+**Why:** Matches existing IdentityAuth.psm1 exactly:
 ```powershell
-.\Accounts_Onboard_Utility.ps1 -PVWAURL $pvwaUrl -logonToken $token
+@{
+    Authorization = "Bearer eyJ..."
+    'X-IDAP-NATIVE-CLIENT' = 'true'
+}
+# Usage: .\Accounts_Onboard_Utility.ps1 -logonToken $headers
+# Or: Invoke-RestMethod -Uri $url -Headers $headers
 ```
 
 #### PCloud Only (Not On-Prem)

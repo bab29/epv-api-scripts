@@ -1,0 +1,25 @@
+Current IdentityAuth.psm1 Return Value (CORRECT URL)
+====================================================
+
+Result Type: System.Collections.Generic.Dictionary`2[[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]
+
+Keys: Authorization, X-IDAP-NATIVE-CLIENT
+
+Authorization Key Exists: True
+Authorization Value: Bearer 
+
+X-IDAP-NATIVE-CLIENT Key Exists: True
+X-IDAP-NATIVE-CLIENT Value: true
+
+Full Object:
+
+Key   : Authorization
+Value : Bearer 
+
+Key   : X-IDAP-NATIVE-CLIENT
+Value : true
+
+
+
+For Accounts_Onboard_Utility:
+logonToken parameter should receive: Bearer 

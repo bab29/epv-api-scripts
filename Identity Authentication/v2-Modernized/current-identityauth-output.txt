@@ -1,0 +1,20 @@
+Current IdentityAuth.psm1 Return Value
+======================================
+
+Type: System.Collections.Generic.Dictionary`2[[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=9.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]
+
+Keys: Authorization, X-IDAP-NATIVE-CLIENT
+
+Authorization value: Bearer 
+Authorization type: System.String
+
+X-IDAP-NATIVE-CLIENT value: true
+
+Full object:
+
+Key                  Value
+---                  -----
+Authorization        Bearer 
+X-IDAP-NATIVE-CLIENT true
+
+

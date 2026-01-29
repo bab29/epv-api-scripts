@@ -19,7 +19,7 @@ This is a **complete rewrite** of the Identity Authentication module with modern
 ✅ **No Write-Host** - Proper output streams (Write-Output, Write-Verbose, Write-Warning)  
 ✅ **Session State Management** - `$script:CurrentSession` with automatic expiry detection  
 ✅ **Comprehensive Logging** - Transcript support with sensitive data masking  
-✅ **Simplified Return Value** - Returns Bearer token string (not hashtable)
+✅ **Standardized Return Value** - Returns hashtable with Authorization and X-IDAP-NATIVE-CLIENT headers
 
 ---
 
@@ -168,10 +168,10 @@ Import-Module .\IdentityAuth7.psm1  # PS 7+ (recommended)
 
 # OAuth Authentication (recommended for automation)
 $creds = Get-Credential -Message "ClientID (Username) and ClientSecret (Password)"
-$token = Get-IdentityHeader -OAuthCreds $creds -PCloudURL "https://tenant.cyberark.cloud"
+$headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL "https://tenant.cyberark.cloud"
 
 # Use with Accounts_Onboard_Utility.ps1
-.\Accounts_Onboard_Utility.ps1 -PVWAURL "https://tenant.privilegecloud.cyberark.cloud" -logonToken $token
+.\Accounts_Onboard_Utility.ps1 -PVWAURL "https://tenant.privilegecloud.cyberark.cloud" -logonToken $headers
 
 # Interactive with MFA
 $token = Get-IdentityHeader -IdentityUserName "admin@company.com" -PCloudURL "https://tenant.cyberark.cloud" -Verbose
@@ -183,13 +183,9 @@ $token = Get-IdentityHeader -IdentityUserName "admin@company.com" -PCloudURL "ht
 
 ### Direct REST API Usage
 ```powershell
-$token = Get-IdentityHeader -OAuthCreds $creds -PCloudURL "https://tenant.cyberark.cloud"
+$headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL "https://tenant.cyberark.cloud"
 
-# Call any PCloud API
-$headers = @{
-    Authorization = $token
-    'X-IDAP-NATIVE-CLIENT' = 'true'
-}
+# Use headers directly for any PCloud API call
 $accounts = Invoke-RestMethod -Uri "https://tenant.privilegecloud.cyberark.cloud/PasswordVault/API/Accounts" -Headers $headers
 ```
 
@@ -232,13 +228,13 @@ $accounts = Invoke-RestMethod -Uri "https://tenant.privilegecloud.cyberark.cloud
 
 ## Key Design Decisions
 
-### Return Value: Token String (Not Hashtable)
-**Decision:** Return the Bearer token as a plain string  
+### Return Value: Hashtable with Headers
+**Decision:** Return hashtable with Authorization and X-IDAP-NATIVE-CLIENT keys  
 **Rationale:**
-- Matches existing Accounts_Onboard_Utility.ps1 usage: `-logonToken $token`
-- Simpler for users: `$token = Get-IdentityHeader ...`
-- PCloud-specific (on-prem uses different auth)
-- Easy to add to headers: `@{Authorization = $token}`
+- Matches current IdentityAuth.psm1 exactly: `@{Authorization = "Bearer token"; 'X-IDAP-NATIVE-CLIENT' = 'true'}`
+- Direct usage: `Invoke-RestMethod -Uri $url -Headers $headers`
+- Accounts_Onboard_Utility.ps1 supports both string and hashtable formats
+- Eliminates need to manually construct headers
 
 ### Dual Module Approach
 **Decision:** Separate modules for PS5.1 and PS7+  
