@@ -18,7 +18,7 @@ function Get-OAuthToken {
         [string]$IdentityTenantURL
     )
     
-    Write-Verbose "Initiating OAuth authentication to $IdentityTenantURL"
+    Write-IdentityLog -Message "Initiating OAuth authentication" -Level Verbose -Component 'OAuth' -AdditionalData @{URL = $IdentityTenantURL}
     
     # Extract client ID and secret from credential
     $clientId = $OAuthCreds.UserName
@@ -33,15 +33,22 @@ function Get-OAuthToken {
     }
     
     try {
-        Write-Verbose "Requesting OAuth token..."
+        Write-IdentityLog -Message "Requesting OAuth token from Identity" -Level Verbose -Component 'OAuth'
+        
         $response = Invoke-RestMethod -Uri $tokenUrl -Method Post -Body $body -ContentType 'application/x-www-form-urlencoded' -ErrorAction Stop
         
+        # Validate response
+        $null = Test-AuthenticationResponse -Response $response -AuthMethod 'OAuth'
+        
         if ($response.access_token) {
-            Write-Verbose "OAuth token received successfully"
+            $tokenPreview = Hide-SensitiveData -Text "Bearer $($response.access_token)" -DataType Token
+            Write-IdentityLog -Message "OAuth token received: $tokenPreview" -Level Verbose -Component 'OAuth'
             
             # Calculate expiry time
             $expiresIn = if ($response.expires_in) { $response.expires_in } else { 3600 }
             $expiry = (Get-Date).AddSeconds($expiresIn)
+            
+            Write-IdentityLog -Message "Token expires in $expiresIn seconds" -Level Verbose -Component 'OAuth' -AdditionalData @{ExpiresAt = $expiry}
             
             return @{
                 AccessToken = $response.access_token
@@ -50,10 +57,16 @@ function Get-OAuthToken {
                 ExpiresAt   = $expiry
             }
         } else {
-            throw "OAuth response did not contain access_token"
+            $errorRecord = New-IdentityErrorRecord `
+                -Message "OAuth response did not contain access_token" `
+                -ErrorId 'OAuthNoToken' `
+                -Category InvalidResult `
+                -RecommendedAction "Verify OAuth client credentials and permissions"
+            throw $errorRecord
         }
     } catch {
-        Write-Error "OAuth authentication failed: $($_.Exception.Message)"
+        $safeMessage = Get-SafeErrorMessage -ErrorRecord $_
+        Write-IdentityLog -Message "OAuth authentication failed: $safeMessage" -Level Error -Component 'OAuth'
         throw
     }
 }
