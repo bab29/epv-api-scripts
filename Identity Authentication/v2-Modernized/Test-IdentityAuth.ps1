@@ -139,39 +139,31 @@ function Test-OAuth {
         }
     }
 
-    # Optionally get Identity URL (for tenants where auto-derivation doesn't work)
-    Write-Host ""
-    Write-Host "Identity URL can be auto-derived from PCloud URL." -ForegroundColor Gray
-    $identityUrlInput = Read-Host "Press Enter to auto-derive, or provide Identity URL manually (e.g., https://abc1234.id.cyberark.cloud)"
-    
-    $identityUrl = if ($identityUrlInput) {
-        $identityUrlInput.TrimEnd('/')
-    } else {
-        $null
-    }
-    
     try {
+        Write-Host ""
         Write-Host "  Testing OAuth authentication..."
         Write-Host "  Using normalized PCloud URL: $pcloudUrl" -ForegroundColor Gray
-        if ($identityUrl) {
-            Write-Host "  Using provided Identity URL: $identityUrl" -ForegroundColor Gray
-            $headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL $pcloudUrl -IdentityURL $identityUrl -Verbose
-        } else {
-            Write-Host "  Auto-deriving Identity URL..." -ForegroundColor Gray
-            $headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL $pcloudUrl -Verbose
-        }
+        Write-Host "  Attempting auto-discovery of Identity URL..." -ForegroundColor Gray
         
-        # Validate headers
-        if ($headers -and $headers.Authorization -and $headers['X-IDAP-NATIVE-CLIENT']) {
-            Write-TestResult "OAuth Authentication" $true
-            Write-Host "    Authorization: $($headers.Authorization.Substring(0, 50))..." -ForegroundColor Gray
-            Write-Host "    X-IDAP-NATIVE-CLIENT: $($headers['X-IDAP-NATIVE-CLIENT'])" -ForegroundColor Gray
-            
-            # Test token caching
+        # Try auto-derivation first
+        try {
+            $headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL $pcloudUrl -Verbose
+        } catch {
+            # Auto-derivation failed, prompt for manual input
             Write-Host ""
-            Write-Host "  Testing token caching..."
-            $headers2 = Get-IdentityHeader -OAuthCreds $creds -PCloudURL $pcloudUrl
+            Write-Host "  Auto-discovery failed: $($_.Exception.Message)" -ForegroundColor Yellow
+            Write-Host "  Please provide Identity URL manually." -ForegroundColor Yellow
+            Write-Host ""
             
+            $identityUrlInput = Read-Host "Enter Identity URL (e.g., https://abc1234.id.cyberark.cloud)"
+            
+            if ($identityUrlInput) {
+                $identityUrl = $identityUrlInput.TrimEnd('/')
+                Write-Host "  Using provided Identity URL: $identityUrl" -ForegroundColor Gray
+                $headers = Get-IdentityHeader -OAuthCreds $creds -PCloudURL $pcloudUrl -IdentityURL $identityUrl -Verbose
+            } else {
+                throw "Identity URL is required but was not provided"
+            }
             if ($headers.Authorization -eq $headers2.Authorization) {
                 Write-TestResult "Token Caching" $true
                 Write-Host "    Same token returned (cached successfully)" -ForegroundColor Gray
