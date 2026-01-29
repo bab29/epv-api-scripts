@@ -1,0 +1,150 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build: PS5.1 Module",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "${workspaceFolder}/Identity Authentication/v2-Modernized/Build/Build-PS51Module.ps1"
+            ],
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        {
+            "label": "Build: PS7 Module",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "${workspaceFolder}/Identity Authentication/v2-Modernized/Build/Build-PS7Module.ps1"
+            ],
+            "problemMatcher": [],
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        {
+            "label": "Build: All Modules",
+            "dependsOn": [
+                "Build: PS5.1 Module",
+                "Build: PS7 Module"
+            ],
+            "problemMatcher": [],
+            "group": "build"
+        },
+        {
+            "label": "Test: Run Pester Tests",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "Invoke-Pester -Path '${workspaceFolder}/Identity Authentication/v2-Modernized/Tests' -Output Detailed"
+            ],
+            "problemMatcher": [],
+            "group": {
+                "kind": "test",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        {
+            "label": "Analyze: PSScriptAnalyzer",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "Invoke-ScriptAnalyzer -Path '${workspaceFolder}/Identity Authentication/v2-Modernized' -Settings '${workspaceFolder}/Identity Authentication/v2-Modernized/PSScriptAnalyzerSettings.psd1' -Recurse"
+            ],
+            "problemMatcher": [],
+            "group": "test",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true
+            }
+        },
+        {
+            "label": "Deploy: Install to User Modules",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "Copy-Item -Path '${workspaceFolder}/Identity Authentication/v2-Modernized/Distribution/IdentityAuth' -Destination \"$env:USERPROFILE\\Documents\\PowerShell\\Modules\" -Recurse -Force; Write-Host 'Module deployed to user modules'"
+            ],
+            "problemMatcher": [],
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Deploy: Install to System Modules",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { Write-Host 'ERROR: Requires Administrator privileges' -ForegroundColor Red; exit 1 }; Copy-Item -Path '${workspaceFolder}/Identity Authentication/v2-Modernized/Distribution/IdentityAuth' -Destination \"$env:ProgramFiles\\PowerShell\\Modules\" -Recurse -Force; Write-Host 'Module deployed to system modules'"
+            ],
+            "problemMatcher": [],
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Clean: Remove Build Artifacts",
+            "type": "shell",
+            "command": "pwsh",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                "Remove-Item -Path '${workspaceFolder}/Identity Authentication/v2-Modernized/Distribution' -Recurse -Force -ErrorAction SilentlyContinue; Write-Host 'Build artifacts cleaned'"
+            ],
+            "problemMatcher": [],
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared"
+            }
+        }
+    ]
+}
