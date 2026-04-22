@@ -198,115 +198,115 @@
 
 [CmdletBinding()]
 param(
-	[Parameter(Mandatory = $true, HelpMessage = 'Please enter your PVWA address (For example: https://pvwa.mydomain.com/PasswordVault)')]
-	#[ValidateScript({Invoke-WebRequest -UseBasicParsing -DisableKeepAlive -Uri $_ -Method 'Head' -ErrorAction 'stop' -TimeoutSec 30})]
-	[Alias('url')]
-	[String]$PVWAURL,
+    [Parameter(Mandatory = $true, HelpMessage = 'Please enter your PVWA address (For example: https://pvwa.mydomain.com/PasswordVault)')]
+    #[ValidateScript({Invoke-WebRequest -UseBasicParsing -DisableKeepAlive -Uri $_ -Method 'Head' -ErrorAction 'stop' -TimeoutSec 30})]
+    [Alias('url')]
+    [String]$PVWAURL,
 
-	[Parameter(Mandatory = $false, HelpMessage = 'Enter the Authentication type (Default:CyberArk)')]
-	[ValidateSet('cyberark', 'ldap', 'radius')]
-	[String]$AuthType = 'cyberark',
+    [Parameter(Mandatory = $false, HelpMessage = 'Enter the Authentication type (Default:CyberArk)')]
+    [ValidateSet('cyberark', 'ldap', 'radius')]
+    [String]$AuthType = 'cyberark',
 
-	[Parameter(Mandatory = $false, HelpMessage = 'Enter the RADIUS OTP')]
-	[ValidateScript({ $AuthType -eq 'radius' })]
-	[String]$OTP,
+    [Parameter(Mandatory = $false, HelpMessage = 'Enter the RADIUS OTP')]
+    [ValidateScript({ $AuthType -eq 'radius' })]
+    [String]$OTP,
 
-	[Parameter(Mandatory = $false, HelpMessage = 'Vault Stored Credentials')]
-	[PSCredential]$PVWACredentials,
+    [Parameter(Mandatory = $false, HelpMessage = 'Vault Stored Credentials')]
+    [PSCredential]$PVWACredentials,
 
-	[Parameter(Mandatory = $false, HelpMessage = 'Logon Token')]
-	$LogonToken,
+    [Parameter(Mandatory = $false, HelpMessage = 'Logon Token')]
+    $LogonToken,
 
-	# Use this switch to Disable SSL verification (NOT RECOMMENDED)
-	[Parameter(Mandatory = $false)]
-	[Switch]$DisableSSLVerify,
+    # Use this switch to Disable SSL verification (NOT RECOMMENDED)
+    [Parameter(Mandatory = $false)]
+    [Switch]$DisableSSLVerify,
 
-	[Parameter(Mandatory = $false, HelpMessage = 'Process all selected components in parallel using background jobs (default: serial).')]
-	[Switch]$Jobs,
+    [Parameter(Mandatory = $false, HelpMessage = 'Process all selected components in parallel using background jobs (default: serial).')]
+    [Switch]$Jobs,
 
-	[Parameter(Mandatory = $false)]
-	[Switch]$AllComponentTypes,
+    [Parameter(Mandatory = $false)]
+    [Switch]$AllComponentTypes,
 
-	[Parameter(Mandatory = $false)]
-	[Switch]$AllServers,
+    [Parameter(Mandatory = $false)]
+    [Switch]$AllServers,
 
-	[Parameter(Mandatory = $false)]
-	[Switch]$DisconnectedOnly,
+    [Parameter(Mandatory = $false)]
+    [Switch]$DisconnectedOnly,
 
-	[Parameter(Mandatory = $false)]
-	[Switch]$ConnectedOnly,
+    [Parameter(Mandatory = $false)]
+    [Switch]$ConnectedOnly,
 
-	[Parameter(Mandatory = $false, HelpMessage = 'Target Server')]
-	[String]$targetServer,
+    [Parameter(Mandatory = $false, HelpMessage = 'Target Server')]
+    [String]$targetServer,
 
-	[Parameter(Mandatory = $false, HelpMessage = 'Target Component')]
-	[ValidateSet('CPM', 'PSM', 'PVWA', 'CP', 'AAM Credential Provider', 'PSM/PSMP')]
-	[String]$ComponentType,
+    [Parameter(Mandatory = $false, HelpMessage = 'Target Component')]
+    [ValidateSet('CPM', 'PSM', 'PVWA', 'CP', 'AAM Credential Provider', 'PSM/PSMP')]
+    [String]$ComponentType,
 
-	[Parameter(Mandatory = $false, HelpMessage = 'Target Component Users')]
-	[String]$ComponentUsers,
+    [Parameter(Mandatory = $false, HelpMessage = 'Target Component Users')]
+    [String]$ComponentUsers,
 
-	[Parameter(Mandatory = $false, HelpMessage = 'Target Component Users via filter')]
-	[String]$ComponentUserFilter,
+    [Parameter(Mandatory = $false, HelpMessage = 'Target Component Users via filter')]
+    [String]$ComponentUserFilter,
 
-	[Parameter(Mandatory = $false, HelpMessage = 'Mapping File')]
-	[String]$MapFile,
+    [Parameter(Mandatory = $false, HelpMessage = 'Mapping File')]
+    [String]$MapFile,
 
-	[Parameter(Mandatory = $false, HelpMessage = 'Old Domain for FQDN')]
-	[String]$OldDomain,
+    [Parameter(Mandatory = $false, HelpMessage = 'Old Domain for FQDN')]
+    [String]$OldDomain,
 
-	[Parameter(Mandatory = $false, HelpMessage = 'New Domain for FQDN')]
-	[String]$newDomain,
+    [Parameter(Mandatory = $false, HelpMessage = 'New Domain for FQDN')]
+    [String]$newDomain,
 
-	[Parameter(Mandatory = $false, HelpMessage = 'New vault address')]
-	[String]$vaultAddress,
+    [Parameter(Mandatory = $false, HelpMessage = 'New vault address')]
+    [String]$vaultAddress,
 
-	[Parameter(Mandatory = $false, HelpMessage = 'New api address')]
-	[String]$apiAddress,
+    [Parameter(Mandatory = $false, HelpMessage = 'New api address')]
+    [String]$apiAddress,
 
-	[Parameter(Mandatory = $false, HelpMessage = 'Credentials for WinRM connections to remote component servers (for workgroups or untrusted domains)')]
-	[PSCredential]$RemoteCredential,
+    [Parameter(Mandatory = $false, HelpMessage = 'Credentials for WinRM connections to remote component servers (for workgroups or untrusted domains)')]
+    [PSCredential]$RemoteCredential,
 
-	[Parameter(Mandatory = $false, HelpMessage = 'Require SSL (HTTPS/port 5986) for all WinRM connections. Without this switch the script tries SSL first and falls back to non-SSL.')]
-	[Switch]$WinRMUseSSL,
+    [Parameter(Mandatory = $false, HelpMessage = 'Require SSL (HTTPS/port 5986) for all WinRM connections. Without this switch the script tries SSL first and falls back to non-SSL.')]
+    [Switch]$WinRMUseSSL,
 
-	[Parameter(Mandatory = $false, HelpMessage = 'Force non-SSL (HTTP/port 5985) for all WinRM connections. Skips the SSL attempt entirely.')]
-	[Switch]$WinRMUseNonSSL,
+    [Parameter(Mandatory = $false, HelpMessage = 'Force non-SSL (HTTP/port 5985) for all WinRM connections. Skips the SSL attempt entirely.')]
+    [Switch]$WinRMUseNonSSL,
 
-	[Parameter(Mandatory = $false, HelpMessage = 'After each serial reset, display the last N lines of the component log')]
-	[Switch]$ShowLogs,
+    [Parameter(Mandatory = $false, HelpMessage = 'After each serial reset, display the last N lines of the component log')]
+    [Switch]$ShowLogs,
 
-	[Parameter(Mandatory = $false, HelpMessage = 'Number of log lines to display when -ShowLogs is used')]
-	[int]$LogTail = 30,
+    [Parameter(Mandatory = $false, HelpMessage = 'Number of log lines to display when -ShowLogs is used')]
+    [int]$LogTail = 30,
 
-	[Parameter(Mandatory = $false, HelpMessage = 'Log file name to display when -ShowLogs is used, or All for every log defined for the component type. Tab-completes to logs valid for the selected -ComponentType.')]
-	[ArgumentCompleter({
-		param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
-		$logMap = @{
-			CPM                       = @('PMConsole.log', 'PMTrace.log', 'pm.log', 'pm_error.log',
-			                              'CACPMScanner.log', 'Casos.Activity.log', 'Casos.Debug.log', 'Casos.Error.log')
-			PSM                       = @('PSMConsole.log', 'PSMTrace.log')
-			'PSM/PSMP'                = @('PSMConsole.log', 'PSMTrace.log')
-			PVWA                      = @('CyberArk.WebApplication.log', 'CyberArk.WebTasksEngine.log',
-			                              'PVWA.App.Log', 'Cyberark.Reports.log',
-			                              'CyberArk.WebConsole.log', 'CyberArk.WebTasksService.log')
-			CP                        = @('APPConsole.log', 'APPTrace.log', 'APPAudit.log')
-			'AAM Credential Provider' = @('APPConsole.log', 'APPTrace.log', 'APPAudit.log')
-		}
-		$candidates = @('All')
-		$ct = $fakeBoundParameters['ComponentType']
-		if ($null -ne $ct -and $logMap.ContainsKey($ct)) {
-			$candidates += $logMap[$ct]
-		} else {
-			$candidates += $logMap.Values | ForEach-Object { $_ } | Select-Object -Unique
-		}
-		$candidates | Where-Object { $_ -like "$wordToComplete*" } |
-			ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
-	})]
-	[String]$LogName = 'All',
+    [Parameter(Mandatory = $false, HelpMessage = 'Log file name to display when -ShowLogs is used, or All for every log defined for the component type. Tab-completes to logs valid for the selected -ComponentType.')]
+    [ArgumentCompleter({
+            param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
+            $logMap = @{
+                CPM                       = @('PMConsole.log', 'PMTrace.log', 'pm.log', 'pm_error.log',
+                    'CACPMScanner.log', 'Casos.Activity.log', 'Casos.Debug.log', 'Casos.Error.log')
+                PSM                       = @('PSMConsole.log', 'PSMTrace.log')
+                'PSM/PSMP'                = @('PSMConsole.log', 'PSMTrace.log')
+                PVWA                      = @('CyberArk.WebApplication.log', 'CyberArk.WebTasksEngine.log',
+                    'PVWA.App.Log', 'Cyberark.Reports.log',
+                    'CyberArk.WebConsole.log', 'CyberArk.WebTasksService.log')
+                CP                        = @('APPConsole.log', 'APPTrace.log', 'APPAudit.log')
+                'AAM Credential Provider' = @('APPConsole.log', 'APPTrace.log', 'APPAudit.log')
+            }
+            $candidates = @('All')
+            $ct = $fakeBoundParameters['ComponentType']
+            if ($null -ne $ct -and $logMap.ContainsKey($ct)) {
+                $candidates += $logMap[$ct]
+            } else {
+                $candidates += $logMap.Values | ForEach-Object { $_ } | Select-Object -Unique
+            }
+            $candidates | Where-Object { $_ -like "$wordToComplete*" } |
+            ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+        })]
+    [String]$LogName = 'All',
 
-	[Parameter(Mandatory = $false, HelpMessage = 'Amount of attempts')]
-	[int]$tries = 5
+    [Parameter(Mandatory = $false, HelpMessage = 'Amount of attempts')]
+    [int]$tries = 5
 )
 
 #region Script Init
@@ -314,7 +314,7 @@ $Script:InDebug = $PSBoundParameters.Debug.IsPresent
 $Script:InVerbose = $PSBoundParameters.Verbose.IsPresent
 $oldverbose = $VerbosePreference
 if ($InVerbose) {
-	$VerbosePreference = 'continue'
+    $VerbosePreference = 'continue'
 }
 
 # Get Script Location
@@ -335,29 +335,29 @@ $Script:AuthType = $AuthType
 
 #region Script Variables
 if ($WinRMUseSSL -and $WinRMUseNonSSL) {
-	Write-Error '-WinRMUseSSL and -WinRMUseNonSSL are mutually exclusive. Specify only one.'
-	return
+    Write-Error '-WinRMUseSSL and -WinRMUseNonSSL are mutually exclusive. Specify only one.'
+    return
 }
 $Script:WinRMUseSSL = $WinRMUseSSL.IsPresent
 $Script:WinRMUseNonSSL = $WinRMUseNonSSL.IsPresent
 # $Script:CredCommands, $Script:CpmServices, $Script:PvwaServices, $Script:PsmServices,
 # and $Script:AamServices are defined in Reset-WinComponentCredential.ps1 (loaded below via dot-source).
 
-$Script:PrePSSession = { $env:PSModulePath = "C:\Program Files\WindowsPowerShell\Modules;C:\WINDOWS\system32\WindowsPowerShell\v1.0\Modules;" }
+$Script:PrePSSession = { $env:PSModulePath = 'C:\Program Files\WindowsPowerShell\Modules;C:\WINDOWS\system32\WindowsPowerShell\v1.0\Modules;' }
 #endregion
 
 #region URL Variables
-$URL_PVWAAPI = $Script:PVWAURL + "/api"
-$URL_Authentication = $URL_PVWAAPI + "/auth"
+$URL_PVWAAPI = $Script:PVWAURL + '/api'
+$URL_Authentication = $URL_PVWAAPI + '/auth'
 $URL_Logon = $URL_Authentication + "/$Script:AuthType/Logon"
-$URL_Logoff = $URL_Authentication + "/Logoff"
+$URL_Logoff = $URL_Authentication + '/Logoff'
 
-$URL_UserSearch = $URL_PVWAAPI + "/Users?filter=componentUser&search={0}"
-$URL_UserResetPassword = $URL_PVWAAPI + "/Users/{0}/ResetPassword"
-$URL_Activate = $URL_PVWAAPI + "/Users/{0}/Activate"
+$URL_UserSearch = $URL_PVWAAPI + '/Users?filter=componentUser&search={0}'
+$URL_UserResetPassword = $URL_PVWAAPI + '/Users/{0}/ResetPassword'
+$URL_Activate = $URL_PVWAAPI + '/Users/{0}/Activate'
 
-$URL_HealthSummery = $URL_PVWAAPI + "/ComponentsMonitoringSummary"
-$URL_HealthDetails = $URL_PVWAAPI + "/ComponentsMonitoringDetails/{0}"
+$URL_HealthSummery = $URL_PVWAAPI + '/ComponentsMonitoringSummary'
+$URL_HealthDetails = $URL_PVWAAPI + '/ComponentsMonitoringDetails/{0}'
 #endregion
 
 #region Functions
@@ -399,19 +399,17 @@ function Show-ComponentLog {
         $logSession = New-PSLogon -server $Server -Credential $Credential
         Invoke-Command -Session $logSession -FilePath "$ScriptLocation\Reset-WinComponentCredential.ps1"
         Get-ComponentLog -Server $Server -Session $logSession -ComponentType $ComponentType -LogName $LogName -Tail $Tail
-        Write-LogMessage -type Info -MSG "End of log output" -Footer
-    }
-    catch {
+        Write-LogMessage -type Info -MSG 'End of log output' -Footer
+    } catch {
         Write-LogMessage -type Warning -MSG "Could not retrieve logs from $Server : $($_.Exception.Message)"
-    }
-    finally {
+    } finally {
         if ($null -ne $logSession) {
             Remove-PSSession $logSession -ErrorAction SilentlyContinue
         }
     }
 }
 
-Function Invoke-Rest {
+function Invoke-Rest {
     <#
 .SYNOPSIS
 Invoke REST Method
@@ -430,7 +428,7 @@ The Header as Dictionary object
 #>
     param (
         [Parameter(Mandatory = $true)]
-        [ValidateSet("GET", "POST", "DELETE", "PATCH")]
+        [ValidateSet('GET', 'POST', 'DELETE', 'PATCH')]
         [String]$Command,
         [Parameter(Mandatory = $true)]
         [ValidateNotNullOrEmpty()]
@@ -440,38 +438,35 @@ The Header as Dictionary object
         [Parameter(Mandatory = $false)]
         [String]$Body,
         [Parameter(Mandatory = $false)]
-        [ValidateSet("Continue", "Ignore", "Inquire", "SilentlyContinue", "Stop", "Suspend")]
-        [String]$ErrAction = "Continue"
+        [ValidateSet('Continue', 'Ignore', 'Inquire', 'SilentlyContinue', 'Stop', 'Suspend')]
+        [String]$ErrAction = 'Continue'
     )
 
-    $restResponse = ""
+    $restResponse = ''
     try {
         if ([string]::IsNullOrEmpty($Body)) {
-            Write-LogMessage -Type Verbose -Msg "Invoke-RestMethod -Uri $URI -Method $Command -Header $Header -ContentType ""application/json"" -TimeoutSec 2700"
-            $restResponse = Invoke-RestMethod -Uri $URI -Method $Command -Header $Header -ContentType "application/json" -TimeoutSec 2700 -ErrorAction $ErrAction
+            Write-LogMessage -type Verbose -MSG "Invoke-RestMethod -Uri $URI -Method $Command -Header $Header -ContentType ""application/json"" -TimeoutSec 2700"
+            $restResponse = Invoke-RestMethod -Uri $URI -Method $Command -Header $Header -ContentType 'application/json' -TimeoutSec 2700 -ErrorAction $ErrAction
+        } else {
+            Write-LogMessage -type Verbose -MSG "Invoke-RestMethod -Uri $URI -Method $Command -Header $Header -ContentType ""application/json"" -Body $Body -TimeoutSec 2700"
+            $restResponse = Invoke-RestMethod -Uri $URI -Method $Command -Header $Header -ContentType 'application/json' -Body $Body -TimeoutSec 2700 -ErrorAction $ErrAction
         }
-        else {
-            Write-LogMessage -Type Verbose -Msg "Invoke-RestMethod -Uri $URI -Method $Command -Header $Header -ContentType ""application/json"" -Body $Body -TimeoutSec 2700"
-            $restResponse = Invoke-RestMethod -Uri $URI -Method $Command -Header $Header -ContentType "application/json" -Body $Body -TimeoutSec 2700 -ErrorAction $ErrAction
-        }
-    }
-    catch [System.Net.WebException] {
-        if ($ErrAction -match ("\bContinue\b|\bInquire\b|\bStop\b|\bSuspend\b")) {
-            Write-LogMessage -Type Error -Msg "Error Message: $_"
-            Write-LogMessage -Type Error -Msg "Exception Message: $($_.Exception.Message)"
-            Write-LogMessage -Type Error -Msg "Status Code: $($_.Exception.Response.StatusCode.value__)"
-            Write-LogMessage -Type Error -Msg "Status Description: $($_.Exception.Response.StatusDescription)"
+    } catch [System.Net.WebException] {
+        if ($ErrAction -match ('\bContinue\b|\bInquire\b|\bStop\b|\bSuspend\b')) {
+            Write-LogMessage -type Error -MSG "Error Message: $_"
+            Write-LogMessage -type Error -MSG "Exception Message: $($_.Exception.Message)"
+            Write-LogMessage -type Error -MSG "Status Code: $($_.Exception.Response.StatusCode.value__)"
+            Write-LogMessage -type Error -MSG "Status Description: $($_.Exception.Response.StatusDescription)"
         }
         $restResponse = $null
+    } catch {
+        throw $(New-Object System.Exception ("Invoke-Rest: Error in running $Command on '$URI'", $_.Exception))
     }
-    catch {
-        Throw $(New-Object System.Exception ("Invoke-Rest: Error in running $Command on '$URI'", $_.Exception))
-    }
-    Write-LogMessage -Type Verbose -Msg "Invoke-REST Response: $restResponse"
+    Write-LogMessage -type Verbose -MSG "Invoke-REST Response: $restResponse"
     return $restResponse
 }
 
-Function Get-LogonHeader {
+function Get-LogonHeader {
     <#
 .SYNOPSIS
 Get-LogonHeader
@@ -491,7 +486,7 @@ The REST API Credentials to authenticate
     # Create the POST Body for the Logon
     # ----------------------------------
     $logonBodyHash = @{ username = $Credentials.username.Replace('\', ''); password = $Credentials.GetNetworkCredential().password; concurrentSession = $concurrentSession }
-    If (![string]::IsNullOrEmpty($RadiusOTP)) {
+    if (![string]::IsNullOrEmpty($RadiusOTP)) {
         $logonBodyHash.password += ",$RadiusOTP"
     }
     $logonBody = $logonBodyHash | ConvertTo-Json -Compress
@@ -499,14 +494,13 @@ The REST API Credentials to authenticate
         # Logon
         $logonToken = Invoke-Rest -Command Post -Uri $URL_Logon -Body $logonBody
         # Clear logon body
-        $logonBody = ""
-    }
-    catch {
-        Throw $(New-Object System.Exception ("Get-LogonHeader: $($_.Exception.Response.StatusDescription)", $_.Exception))
+        $logonBody = ''
+    } catch {
+        throw $(New-Object System.Exception ("Get-LogonHeader: $($_.Exception.Response.StatusDescription)", $_.Exception))
     }
     $logonHeader = $null
-    If ([string]::IsNullOrEmpty($logonToken)) {
-        Throw "Get-LogonHeader: Logon Token is Empty - Cannot login"
+    if ([string]::IsNullOrEmpty($logonToken)) {
+        throw 'Get-LogonHeader: Logon Token is Empty - Cannot login'
     }
 
     # Create a Logon Token Header (This will be used through out all the script)
@@ -515,11 +509,11 @@ The REST API Credentials to authenticate
     return $logonHeader
 }
 
-Function Invoke-Logoff {
-    $null = Invoke-Rest -Uri $URL_Logoff -Header $Script:LogonHeader -Command "Post"
+function Invoke-Logoff {
+    $null = Invoke-Rest -Uri $URL_Logoff -Header $Script:LogonHeader -Command 'Post'
 }
 
-Function Get-LogonTimeUnixTime {
+function Get-LogonTimeUnixTime {
     param (
         [Parameter()]
         [string]$unixTime
@@ -528,7 +522,7 @@ Function Get-LogonTimeUnixTime {
     return $origin.AddSeconds($unixTime).ToLocalTime()
 }
 
-Function Set-UserPassword {
+function Set-UserPassword {
     <#
 .SYNOPSIS
 Set-UserPassword
@@ -545,12 +539,12 @@ The new password as a SecureString
         [Parameter(Mandatory = $true)]
         [SecureString]$Password
     )
-    Process {
+    process {
         Write-LogMessage -type Verbose -MSG "URL for PVWA: $PVWAURL"
         Write-LogMessage -type Verbose -MSG "URL for PVWA API: $URL_PVWAAPI"
         $urlSearch = $Script:URL_UserSearch -f $Username
         Write-LogMessage -type Verbose -MSG "URL for user search: $urlSearch"
-        $searchResult = $(Invoke-Rest -Uri $urlSearch -Header $Script:LogonHeader -Command "Get")
+        $searchResult = $(Invoke-Rest -Uri $urlSearch -Header $Script:LogonHeader -Command 'Get')
         if ($searchResult.Total -gt 0) {
             $userFound = $false
             foreach ($account in $searchResult.users) {
@@ -561,22 +555,20 @@ The new password as a SecureString
 
                         $bodyActivate = @{id = $accountID } | ConvertTo-Json -Depth 3 -Compress
                         $urlActivate = $Script:URL_Activate -f $accountID
-                        $null = Invoke-Rest -Uri $urlActivate -Header $Script:LogonHeader -Command "Post" -Body $bodyActivate
+                        $null = Invoke-Rest -Uri $urlActivate -Header $Script:LogonHeader -Command 'Post' -Body $bodyActivate
 
                         $bodyReset = @{ id = $accountID; newPassword = $(Convert-SecureString($Password)) } | ConvertTo-Json -Depth 3 -Compress
                         $urlReset = $Script:URL_UserResetPassword -f $accountID
-                        $null = Invoke-Rest -Uri $urlReset -Header $Script:LogonHeader -Command "Post" -Body $bodyReset
-                    }
-                    catch {
-                        Throw $_
+                        $null = Invoke-Rest -Uri $urlReset -Header $Script:LogonHeader -Command 'Post' -Body $bodyReset
+                    } catch {
+                        throw $_
                     }
                 }
             }
-            If (!$userFound) {
+            if (!$userFound) {
                 Write-LogMessage -type Verbose -MSG "Unable to locate component account for $Username"
             }
-        }
-        else {
+        } else {
             Write-LogMessage -type Verbose -MSG "Unable to locate component account for $Username"
         }
     }
@@ -605,49 +597,116 @@ function Reset-Credentials {
         [PSCredential]$Credential
     )
 
-    $pvwaHost = $PVWAURL.replace('\', '/').replace('https://', '').replace('http://', '').Split('/')[0].Split(':')[0].ToLower()
+    $pvwaHost = ([System.Uri]$PVWAURL).Host.ToLower()
     $serverHost = $server.ToLower()
-    # Resolve both sides to IP so the check works whether the URL uses an IP or FQDN
-    $pvwaIP   = try { ([System.Net.Dns]::GetHostAddresses($pvwaHost)  | Where-Object { $_.AddressFamily -eq 'InterNetwork' } | Select-Object -First 1).IPAddressToString } catch { $pvwaHost }
-    $serverIP = try { ([System.Net.Dns]::GetHostAddresses($serverHost) | Where-Object { $_.AddressFamily -eq 'InterNetwork' } | Select-Object -First 1).IPAddressToString } catch { $serverHost }
-    If ($pvwaIP -eq $serverIP -or $pvwaHost -eq $serverHost) {
+
+    # Resolve ALL IPv4 addresses for both sides.
+    # A multi-NIC PVWA or server may be reachable under different IPs, so collect the
+    # full set for each and test all combinations.
+    $pvwaIPs = try {
+        [System.Net.Dns]::GetHostAddresses($pvwaHost) |
+        Where-Object { $_.AddressFamily -eq 'InterNetwork' } |
+        ForEach-Object { $_.IPAddressToString }
+    } catch {
+        @()
+    }
+    $serverIPs = try {
+        [System.Net.Dns]::GetHostAddresses($serverHost) |
+        Where-Object { $_.AddressFamily -eq 'InterNetwork' } |
+        ForEach-Object { $_.IPAddressToString }
+    } catch {
+        @()
+    }
+
+    $isSameMachine = $false
+
+    # Check 0: direct hostname string comparison — free, no DNS required.
+    # Catches the common case where $server is the same FQDN as the PVWA URL host.
+    if ($serverHost -eq $pvwaHost) {
+        $isSameMachine = $true
+    }
+
+    # Check 1: IP set intersection.
+    # Any IP that appears on both sides means both names resolve to the same machine.
+    # Testing all IPs on both sides handles multi-NIC hosts on either end.
+    if (-not $isSameMachine) {
+        foreach ($ip in $serverIPs) {
+            if ($pvwaIPs -contains $ip) {
+                $isSameMachine = $true
+                break
+            }
+        }
+    }
+
+    # Check 2: reverse DNS of each server IP → compare FQDN to pvwaHost.
+    # Catches: PVWA URL uses an IP/alias, but the component IP reverse-resolves to the
+    # same FQDN as the PVWA host.
+    if (-not $isSameMachine) {
+        foreach ($ip in $serverIPs) {
+            $fqdn = try {
+                [System.Net.Dns]::GetHostEntry($ip).HostName.ToLower() 
+            } catch {
+                $null 
+            }
+            if ($null -ne $fqdn -and $fqdn -eq $pvwaHost) {
+                $isSameMachine = $true
+                break
+            }
+        }
+    }
+
+    # Check 3: reverse DNS of each PVWA IP → compare FQDN to serverHost.
+    # Mirror of Check 2. Catches: $server is a hostname, and the PVWA's IP
+    # reverse-resolves to that same hostname.
+    if (-not $isSameMachine) {
+        foreach ($ip in $pvwaIPs) {
+            $fqdn = try {
+                [System.Net.Dns]::GetHostEntry($ip).HostName.ToLower() 
+            } catch {
+                $null 
+            }
+            if ($null -ne $fqdn -and $fqdn -eq $serverHost) {
+                $isSameMachine = $true
+                break
+            }
+        }
+    }
+
+    if ($isSameMachine) {
         Write-LogMessage -type Warning -MSG "Skipping PVWA on $server  -  it is the PVWA this script is connected to. Resetting it would drop the REST session." -Footer
         return
     }
-    Try {
-        IF ("Windows" -eq $os) {
+    try {
+        if ('Windows' -eq $os) {
             switch ($ComponentType) {
-                "CPM" {
-                    Reset-WinComponent -Server $server -component "CPM" -componentName $ComponentType -services $Script:CpmServices -vaultaddress $vaultAddress -tries $tries -apiAddress $apiAddress -Credential $Credential; break
+                'CPM' {
+                    Reset-WinComponent -Server $server -component 'CPM' -componentName $ComponentType -services $Script:CpmServices -vaultaddress $vaultAddress -tries $tries -apiAddress $apiAddress -Credential $Credential; break
                 }
-                "PVWA" {
-                    Reset-WinComponent -Server $server -component "PVWA" -componentName $ComponentType -services $Script:PvwaServices -vaultaddress $vaultAddress -tries $tries -Credential $Credential; break
+                'PVWA' {
+                    Reset-WinComponent -Server $server -component 'PVWA' -componentName $ComponentType -services $Script:PvwaServices -vaultaddress $vaultAddress -tries $tries -Credential $Credential; break
                 }
-                "PSM" {
-                    Reset-WinComponent -Server $server -component "PSM" -componentName $ComponentType -services $Script:PsmServices -vaultaddress $vaultAddress -tries $tries -apiAddress $apiAddress -Credential $Credential; break
+                'PSM' {
+                    Reset-WinComponent -Server $server -component 'PSM' -componentName $ComponentType -services $Script:PsmServices -vaultaddress $vaultAddress -tries $tries -apiAddress $apiAddress -Credential $Credential; break
                 }
-                "AAM Credential Provider" {
-                    Reset-WinComponent -Server $server -component "AIM" -componentName $ComponentType -services $Script:AamServices -vaultaddress $vaultAddress -tries $tries -Credential $Credential; break
+                'AAM Credential Provider' {
+                    Reset-WinComponent -Server $server -component 'AIM' -componentName $ComponentType -services $Script:AamServices -vaultaddress $vaultAddress -tries $tries -Credential $Credential; break
                 }
-                "Secrets Manager Credential Providers" {
-                    Reset-WinComponent -Server $server -component "AIM" -componentName $ComponentType -services $Script:AamServices -vaultaddress $vaultAddress -tries $tries -Credential $Credential; break
+                'Secrets Manager Credential Providers' {
+                    Reset-WinComponent -Server $server -component 'AIM' -componentName $ComponentType -services $Script:AamServices -vaultaddress $vaultAddress -tries $tries -Credential $Credential; break
                 }
                 default {
                     Write-LogMessage -type Error -MSG "No Component Type passed for $server"
                 }
             }
+        } elseif ('Linux' -eq $os) {
+            Write-LogMessage -type Error -MSG "Unable to reset PSMP credentials at this time. Manual reset required for $server"
+            throw
+        } else {
+            Write-LogMessage -type Error -MSG "Unable to determine OS type for $server"
+            throw
         }
-        elseIf ("Linux" -eq $os) {
-            Write-LogMessage -type Error -msg "Unable to reset PSMP credentials at this time. Manual reset required for $server"
-            Throw
-        }
-        else {
-            Write-LogMessage -type Error -msg "Unable to determine OS type for $server"
-            Throw
-        }
-    }
-    Catch {
-        Throw
+    } catch {
+        throw
     }
 }
 
@@ -672,32 +731,31 @@ function Reset-WinComponent {
     )
     $complete = $failed = $false
     $attempts = 0
-    Write-LogMessage -type Verbose -MSG "Entering Reset-WinComponent"
+    Write-LogMessage -type Verbose -MSG 'Entering Reset-WinComponent'
     $complete = $failed = $updated = $false
-    While (!$complete -and !$failed) {
+    while (!$complete -and !$failed) {
         try {
-            While (!$complete) {
-                Try {
-                    If ([string]::IsNullOrEmpty($session)) {
+            while (!$complete) {
+                try {
+                    if ([string]::IsNullOrEmpty($session)) {
                         $session = New-PSLogon -server $server -Credential $Credential
-                        Write-LogMessage -type Verbose -MSG "Got Session"
+                        Write-LogMessage -type Verbose -MSG 'Got Session'
                         Write-LogMessage -type Verbose -MSG "Connected to host: $(Invoke-Command -Session $session -ScriptBlock{[System.Net.Dns]::GetHostName()})"
                         Write-LogMessage -type Verbose -MSG "Connected as user: $(Invoke-Command -Session $session -ScriptBlock{whoami.exe})"
                         Invoke-Command -Session $session -FilePath "$ScriptLocation\Reset-WinComponentCredential.ps1"
-                        Write-LogMessage -type Verbose -MSG "Loaded remote functions into session"
+                        Write-LogMessage -type Verbose -MSG 'Loaded remote functions into session'
                     }
-                }
-                Catch {
+                } catch {
                     break
                 }
-                IF (!$Updated) {
+                if (!$Updated) {
                     Write-LogMessage -type Verbose -MSG "Connected to $Server. Getting information about the installed components"
 
                     $compInfo = Get-ComponentInfo -Server $Server -ComponentType $component -Session $Session
 
                     $installLocation = $compInfo.path
                     [version]$version = $compInfo.Version
-                    Write-LogMessage -type Verbose -MSG "Retrived Component Information"
+                    Write-LogMessage -type Verbose -MSG 'Retrived Component Information'
                     Write-LogMessage -type Verbose -MSG "Installation path : $installLocation"
                     Write-LogMessage -type Verbose -MSG "Version: $version"
 
@@ -707,7 +765,7 @@ function Reset-WinComponent {
 
                     $credfailed = Reset-WinCredFile -Server $server -compInfo $compInfo -session $session
 
-                    IF (!($credfailed) -and (![string]::IsNullOrEmpty($vaultaddress))) {
+                    if (!($credfailed) -and (![string]::IsNullOrEmpty($vaultaddress))) {
                         Reset-VaultFile -Server $server -compInfo $compInfo -session $session -vaultAddres $vaultaddress -apiAddress $apiAddress | Out-Null
                     }
                     $Updated = $true
@@ -718,30 +776,26 @@ function Reset-WinComponent {
                 $attempts += 1
 
                 if ($attempts -gt $tries) {
-                    $failed = $true;
+                    $failed = $true
                     Write-LogMessage -type Error -MSG "Failed on $server"
-                    Throw "Failed on $componentName credentials on $server"
+                    throw "Failed on $componentName credentials on $server"
                 }
 
                 if ($updated -and $complete) {
                     Write-LogMessage -type Success -MSG "Update of $componentName component on `"$server`" completed successfully"
-                }
-                elseif ($updated -and !$complete) {
+                } elseif ($updated -and !$complete) {
                     Write-LogMessage -type Warning -MSG "Update of $componentName component on `"$server`" completed successfully, however services did not start. Attempting to restart services"
-                }
-                else {
+                } else {
                     Write-LogMessage -type Warning -MSG "Update of $componentName component on `"$server`" failed, attempting to restart"
                 }
             }
-        }
-        catch {
+        } catch {
             Write-LogMessage -type Error -MSG "Error during update of $componentName on `"$server`": $($_.Exception.Message)"
             if ($null -ne $_.Exception.InnerException) {
                 Write-LogMessage -type Error -MSG "Inner exception: $($_.Exception.InnerException.Message)"
             }
-            Throw
-        }
-        Finally {
+            throw
+        } finally {
             Write-LogMessage -type Verbose -MSG "Disconnecting from `"$server`""
             Remove-PSSession $session
             Write-LogMessage -type Verbose -MSG "Disconnected from $server" -Footer
@@ -760,62 +814,58 @@ function Get-ComponentInfo {
     )
     $newSession = $false
     try {
-        if ($Session.State -ne "Opened") {
+        if ($Session.State -ne 'Opened') {
             $newSession = $true
             $Session = New-PSLogon $server
         }
         $ComponentsFound = Invoke-Command -Session $Session -ScriptBlock { Find-WinComponents $args[0] } -ArgumentList $ComponentType
         return $ComponentsFound
-    }
-    catch {
-        Throw "error"
-    }
-    Finally {
-        If ($newSession) {
+    } catch {
+        throw 'error'
+    } finally {
+        if ($newSession) {
             Remove-PSSession $Session
         }
     }
 }
 
-Function Get-ComponentStatus {
+function Get-ComponentStatus {
     try {
-        $restResponse = $(Invoke-Rest -Uri $URL_HealthSummery -Header $Script:LogonHeader -Command "Get")
-        $selection = $restResponse.Components | Where-Object { $_.ComponentTotalCount -gt 0 } | Select-Object @{Name = "Component Type"; Expression = { $_.'ComponentName' } }, @{Name = "Amount Connected"; Expression = { $_.'ConnectedComponentCount' } }, @{Name = "Total Amount"; Expression = { $_.'ComponentTotalCount' } } | Sort-Object -Property "Component Type"
-        Return $selection
-    }
-    catch {
+        $restResponse = $(Invoke-Rest -Uri $URL_HealthSummery -Header $Script:LogonHeader -Command 'Get')
+        $selection = $restResponse.Components | Where-Object { $_.ComponentTotalCount -gt 0 } | Select-Object @{Name = 'Component Type'; Expression = { $_.'ComponentName' } }, @{Name = 'Amount Connected'; Expression = { $_.'ConnectedComponentCount' } }, @{Name = 'Total Amount'; Expression = { $_.'ComponentTotalCount' } } | Sort-Object -Property 'Component Type'
+        return $selection
+    } catch {
         return $null
     }
 }
 
-Function Get-ComponentDetails {
+function Get-ComponentDetails {
     param (
         [Parameter(Mandatory = $true)]
         $component
     )
 
     switch ($component) {
-        "PSM/PSMP" {
-            $targetComp = "SessionManagement"; break
+        'PSM/PSMP' {
+            $targetComp = 'SessionManagement'; break
         }
-        "Secrets Manager Credential Providers" {
-            $targetComp = "AIM"; break
+        'Secrets Manager Credential Providers' {
+            $targetComp = 'AIM'; break
         }
-        "AAM Credential Provider" {
-            $targetComp = "AIM"; break
+        'AAM Credential Provider' {
+            $targetComp = 'AIM'; break
         }
-        Default {
+        default {
             $targetComp = $component
         }
     }
     $URLHealthDetails = $URL_HealthDetails -f $targetComp
-    Try {
-        $restResponse = $(Invoke-Rest -Uri $URLHealthDetails -Header $Script:LogonHeader -Command "Get")
-        $selection = $restResponse.ComponentsDetails | Select-Object @{Name = "Component Type"; Expression = { $component } }, @{Name = "Component Version"; Expression = { $_.ComponentVersion } }, @{Name = "IP Address"; Expression = { $_.'ComponentIP' } }, @{Name = "Component User"; Expression = { $_.'ComponentUserName' } }, @{Name = "Connected"; Expression = { $_.'IsLoggedOn' } }, @{Name = "Last Connection"; Expression = { Get-LogonTimeUnixTime $_.'LastLogonDate' } } | Sort-Object -Property "IP Address"
-        Return $selection
-    }
-    Catch {
-        Return $null
+    try {
+        $restResponse = $(Invoke-Rest -Uri $URLHealthDetails -Header $Script:LogonHeader -Command 'Get')
+        $selection = $restResponse.ComponentsDetails | Select-Object @{Name = 'Component Type'; Expression = { $component } }, @{Name = 'Component Version'; Expression = { $_.ComponentVersion } }, @{Name = 'IP Address'; Expression = { $_.'ComponentIP' } }, @{Name = 'Component User'; Expression = { $_.'ComponentUserName' } }, @{Name = 'Connected'; Expression = { $_.'IsLoggedOn' } }, @{Name = 'Last Connection'; Expression = { Get-LogonTimeUnixTime $_.'LastLogonDate' } } | Sort-Object -Property 'IP Address'
+        return $selection
+    } catch {
+        return $null
     }
 }
 
@@ -848,8 +898,7 @@ function Invoke-SelectionMenu {
     if (-not $isRemoteSession) {
         try {
             return $Items | Out-GridView -OutputMode Multiple -Title $Title -ErrorAction Stop
-        }
-        catch {
+        } catch {
             # GUI unavailable (HostException, InvalidOperationException, etc.)  -  fall through to console menu
             Write-Verbose "Out-GridView unavailable ($($_.Exception.GetType().Name)). Falling back to console menu."
         }
@@ -869,69 +918,69 @@ function Invoke-SelectionMenu {
         Write-Host "  [$($i + 1)] $($cols -join '  |  ')"
     }
     $raw = Read-Host -Prompt 'Enter comma-separated numbers (e.g. 1,3,5), * for all, or 0 to exit'
-    if ($raw.Trim() -eq '0') { return @() }
-    if ($raw.Trim() -eq '*') { return $Items }
+    if ($raw.Trim() -eq '0') {
+        return @()
+    }
+    if ($raw.Trim() -eq '*') {
+        return $Items
+    }
     $selected = $raw.Split(',') | ForEach-Object {
         $index = [int]$_.Trim() - 1
-        if ($index -ge 0 -and $index -lt $Items.Count) { $Items[$index] }
+        if ($index -ge 0 -and $index -lt $Items.Count) {
+            $Items[$index]
+        }
     }
     return $selected
 }
 
 #endregion
 
-If ($DisableSSLVerify) {
-	try {
-		Write-Warning 'It is not Recommended to disable SSL verification' -WarningAction Inquire
-		# Using Proxy Default credentials if the Server needs Proxy credentials
-		[System.Net.WebRequest]::DefaultWebProxy.Credentials = [System.Net.CredentialCache]::DefaultCredentials
-		# Using TLS 1.2 as security protocol verification
-		[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls11
-		# Disable SSL Verification
-		[System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $DisableSSLVerify }
-	}
-	catch {
-		Write-LogMessage -type Error -MSG 'Could not change SSL validation'
-		Write-LogMessage -type Error -MSG (Join-ExceptionMessage $_.Exception) -ErrorAction 'SilentlyContinue'
-		return
-	}
-}
-Else {
-	try {
-		Write-LogMessage -type Debug -MSG 'Setting script to use TLS 1.2'
-		[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
-	}
-	catch {
-		Write-LogMessage -type Error -MSG 'Could not change SSL settings to use TLS 1.2'
-		Write-LogMessage -type Error -MSG (Join-ExceptionMessage $_.Exception) -ErrorAction 'SilentlyContinue'
-	}
+if ($DisableSSLVerify) {
+    try {
+        Write-Warning 'It is not Recommended to disable SSL verification' -WarningAction Inquire
+        # Using Proxy Default credentials if the Server needs Proxy credentials
+        [System.Net.WebRequest]::DefaultWebProxy.Credentials = [System.Net.CredentialCache]::DefaultCredentials
+        # Using TLS 1.2 as security protocol verification
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls11
+        # Disable SSL Verification
+        [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $DisableSSLVerify }
+    } catch {
+        Write-LogMessage -type Error -MSG 'Could not change SSL validation'
+        Write-LogMessage -type Error -MSG (Join-ExceptionMessage $_.Exception) -ErrorAction 'SilentlyContinue'
+        return
+    }
+} else {
+    try {
+        Write-LogMessage -type Debug -MSG 'Setting script to use TLS 1.2'
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
+    } catch {
+        Write-LogMessage -type Error -MSG 'Could not change SSL settings to use TLS 1.2'
+        Write-LogMessage -type Error -MSG (Join-ExceptionMessage $_.Exception) -ErrorAction 'SilentlyContinue'
+    }
 }
 
 # Check that the PVWA URL is OK
-If (![string]::IsNullOrEmpty($PVWAURL)) {
-	If ($PVWAURL.Substring($PVWAURL.Length - 1) -eq '/') {
-		$PVWAURL = $PVWAURL.Substring(0, $PVWAURL.Length - 1)
-	}
-	try {
-		# Validate PVWA URL is OK
-		Write-LogMessage -type Debug -MSG "Trying to validate URL: $PVWAURL"
-		Invoke-WebRequest -UseBasicParsing -DisableKeepAlive -Uri $PVWAURL -Method 'Head' -TimeoutSec 30 | Out-Null
-	}
-	catch [System.Net.WebException] {
-		If (![string]::IsNullOrEmpty($_.Exception.Response.StatusCode.Value__)) {
-			Write-LogMessage -type Error -MSG "Received error $($_.Exception.Response.StatusCode.Value__) when trying to validate PVWA URL"
-			Write-LogMessage -type Error -MSG 'Check your connection to PVWA and the PVWA URL'
-			return
-		}
-	}
-	catch {
-		Write-LogMessage -type Error -MSG 'PVWA URL could not be validated'
-		Write-LogMessage -type Error -MSG (Join-ExceptionMessage $_.Exception) -ErrorAction 'SilentlyContinue'
-	}
-}
-else {
-	Write-LogMessage -type Error -MSG 'PVWA URL can not be empty'
-	return
+if (![string]::IsNullOrEmpty($PVWAURL)) {
+    if ($PVWAURL.Substring($PVWAURL.Length - 1) -eq '/') {
+        $PVWAURL = $PVWAURL.Substring(0, $PVWAURL.Length - 1)
+    }
+    try {
+        # Validate PVWA URL is OK
+        Write-LogMessage -type Debug -MSG "Trying to validate URL: $PVWAURL"
+        Invoke-WebRequest -UseBasicParsing -DisableKeepAlive -Uri $PVWAURL -Method 'Head' -TimeoutSec 30 | Out-Null
+    } catch [System.Net.WebException] {
+        if (![string]::IsNullOrEmpty($_.Exception.Response.StatusCode.Value__)) {
+            Write-LogMessage -type Error -MSG "Received error $($_.Exception.Response.StatusCode.Value__) when trying to validate PVWA URL"
+            Write-LogMessage -type Error -MSG 'Check your connection to PVWA and the PVWA URL'
+            return
+        }
+    } catch {
+        Write-LogMessage -type Error -MSG 'PVWA URL could not be validated'
+        Write-LogMessage -type Error -MSG (Join-ExceptionMessage $_.Exception) -ErrorAction 'SilentlyContinue'
+    }
+} else {
+    Write-LogMessage -type Error -MSG 'PVWA URL can not be empty'
+    return
 }
 
 Write-LogMessage -type Verbose -MSG 'Getting Logon Token'
@@ -940,32 +989,28 @@ Write-LogMessage -type Verbose -MSG 'Getting Logon Token'
 # Get Credentials to Login
 # ------------------------
 $caption = 'Reset Credential Files Remotely'
-If (![string]::IsNullOrEmpty($logonToken)) {
-	if ($logonToken.GetType().name -eq 'String') {
-		$Script:LogonHeader = @{Authorization = $logonToken }
-	}
-	else {
-		$Script:LogonHeader = $logonToken
-	}
-}
-else {
-	If (![string]::IsNullOrEmpty($PVWACredentials)) {
-		$creds = $PVWACredentials
-	}
-	else {
-		$msg = "Enter your $AuthType User name and Password"
-		$creds = $Host.UI.PromptForCredential($caption, $msg, '', '')
-	}
-	if ($AuthType -eq 'radius' -and ![string]::IsNullOrEmpty($OTP)) {
-		$Script:LogonHeader = Get-LogonHeader -Credentials $creds -concurrentSession $true -RadiusOTP $OTP
-	}
-	else {
-		$Script:LogonHeader = Get-LogonHeader -Credentials $creds -concurrentSession $true
-	}
-	# Verify that we successfully logged on
-	If ($null -eq $Script:LogonHeader) {
-		return # No logon header, end script
-	}
+if (![string]::IsNullOrEmpty($logonToken)) {
+    if ($logonToken.GetType().name -eq 'String') {
+        $Script:LogonHeader = @{Authorization = $logonToken }
+    } else {
+        $Script:LogonHeader = $logonToken
+    }
+} else {
+    if (![string]::IsNullOrEmpty($PVWACredentials)) {
+        $creds = $PVWACredentials
+    } else {
+        $msg = "Enter your $AuthType User name and Password"
+        $creds = $Host.UI.PromptForCredential($caption, $msg, '', '')
+    }
+    if ($AuthType -eq 'radius' -and ![string]::IsNullOrEmpty($OTP)) {
+        $Script:LogonHeader = Get-LogonHeader -Credentials $creds -concurrentSession $true -RadiusOTP $OTP
+    } else {
+        $Script:LogonHeader = Get-LogonHeader -Credentials $creds -concurrentSession $true
+    }
+    # Verify that we successfully logged on
+    if ($null -eq $Script:LogonHeader) {
+        return # No logon header, end script
+    }
 }
 #endregion
 
@@ -975,143 +1020,130 @@ Write-LogMessage -type Info -MSG "Running pre-flight checks (script v$ScriptVers
 # Check: TrustedHosts advisory when using explicit WinRM credentials
 # SSL (HTTPS) connections authenticate the server via certificate and do not require TrustedHosts.
 if ($null -ne $RemoteCredential) {
-	if ($WinRMUseSSL) {
-		Write-LogMessage -type Info -MSG "-WinRMUseSSL set: WinRM will use HTTPS (port 5986) only. TrustedHosts is not required for SSL connections."
-		$script:preFlight_TrustedHosts = $null
-	}
-	elseif ($WinRMUseNonSSL) {
-		Write-LogMessage -type Info -MSG "-WinRMUseNonSSL set: WinRM will use HTTP (port 5985) only. SSL attempt will be skipped."
-		$script:preFlight_TrustedHosts = (Get-Item 'WSMan:\localhost\Client\TrustedHosts' -ErrorAction SilentlyContinue).Value
-		if ([string]::IsNullOrEmpty($script:preFlight_TrustedHosts)) {
-			Write-LogMessage -type Warning -MSG "-WinRMUseNonSSL with -RemoteCredential: non-SSL connections with NTLM/local accounts require TrustedHosts. Currently empty."
-			Write-LogMessage -type Warning -MSG "Fix: Set-Item WSMan:\localhost\Client\TrustedHosts -Value '*' -Force  (or list specific hosts)"
-		}
-		elseif ($script:preFlight_TrustedHosts -ne '*') {
-			Write-LogMessage -type Info -MSG "-RemoteCredential provided. TrustedHosts: $($script:preFlight_TrustedHosts)  -  verify it covers all target servers."
-		}
-	}
-	else {
-		$script:preFlight_TrustedHosts = (Get-Item 'WSMan:\localhost\Client\TrustedHosts' -ErrorAction SilentlyContinue).Value
-		if ([string]::IsNullOrEmpty($script:preFlight_TrustedHosts)) {
-			Write-LogMessage -type Warning -MSG "-RemoteCredential provided. WinRM will try SSL (port 5986) first  -  SSL connections do not need TrustedHosts."
-			Write-LogMessage -type Warning -MSG "If SSL is unavailable, fallback to non-SSL (port 5985) requires TrustedHosts. Currently empty."
-			Write-LogMessage -type Warning -MSG "Fix: Set-Item WSMan:\localhost\Client\TrustedHosts -Value '*' -Force  (or list specific hosts)"
-		}
-		elseif ($script:preFlight_TrustedHosts -ne '*') {
-			Write-LogMessage -type Info -MSG "-RemoteCredential provided. TrustedHosts: $($script:preFlight_TrustedHosts)  -  SSL connections won't need this; verify it covers any servers without a WinRM HTTPS listener."
-		}
-	}
-}
-else {
-	$script:preFlight_TrustedHosts = $null
+    if ($WinRMUseSSL) {
+        Write-LogMessage -type Info -MSG '-WinRMUseSSL set: WinRM will use HTTPS (port 5986) only. TrustedHosts is not required for SSL connections.'
+        $script:preFlight_TrustedHosts = $null
+    } elseif ($WinRMUseNonSSL) {
+        Write-LogMessage -type Info -MSG '-WinRMUseNonSSL set: WinRM will use HTTP (port 5985) only. SSL attempt will be skipped.'
+        $script:preFlight_TrustedHosts = (Get-Item 'WSMan:\localhost\Client\TrustedHosts' -ErrorAction SilentlyContinue).Value
+        if ([string]::IsNullOrEmpty($script:preFlight_TrustedHosts)) {
+            Write-LogMessage -type Warning -MSG '-WinRMUseNonSSL with -RemoteCredential: non-SSL connections with NTLM/local accounts require TrustedHosts. Currently empty.'
+            Write-LogMessage -type Warning -MSG "Fix: Set-Item WSMan:\localhost\Client\TrustedHosts -Value '*' -Force  (or list specific hosts)"
+        } elseif ($script:preFlight_TrustedHosts -ne '*') {
+            Write-LogMessage -type Info -MSG "-RemoteCredential provided. TrustedHosts: $($script:preFlight_TrustedHosts)  -  verify it covers all target servers."
+        }
+    } else {
+        $script:preFlight_TrustedHosts = (Get-Item 'WSMan:\localhost\Client\TrustedHosts' -ErrorAction SilentlyContinue).Value
+        if ([string]::IsNullOrEmpty($script:preFlight_TrustedHosts)) {
+            Write-LogMessage -type Warning -MSG '-RemoteCredential provided. WinRM will try SSL (port 5986) first  -  SSL connections do not need TrustedHosts.'
+            Write-LogMessage -type Warning -MSG 'If SSL is unavailable, fallback to non-SSL (port 5985) requires TrustedHosts. Currently empty.'
+            Write-LogMessage -type Warning -MSG "Fix: Set-Item WSMan:\localhost\Client\TrustedHosts -Value '*' -Force  (or list specific hosts)"
+        } elseif ($script:preFlight_TrustedHosts -ne '*') {
+            Write-LogMessage -type Info -MSG "-RemoteCredential provided. TrustedHosts: $($script:preFlight_TrustedHosts)  -  SSL connections won't need this; verify it covers any servers without a WinRM HTTPS listener."
+        }
+    }
+} else {
+    $script:preFlight_TrustedHosts = $null
 }
 
-Write-LogMessage -type Info -MSG "Tip: Run .\Test-RemoteConnectivity.ps1 -ComputerName <server> to verify WinRM connectivity before processing."
+Write-LogMessage -type Info -MSG 'Tip: Run .\Test-RemoteConnectivity.ps1 -ComputerName <server> to verify WinRM connectivity before processing.'
 Write-LogMessage -type Info -MSG 'Pre-flight checks complete' -Footer
 #endregion
 
 Write-LogMessage -type Verbose -MSG 'Getting Server List'
 $componentList = Get-ComponentStatus | Sort-Object $_.'Component Type'
-If ($AllComponentTypes) {
-	$selectedComponents = $componentList
-}
-elseif (![string]::IsNullOrEmpty($ComponentType)) {
-	$cpSearch = ('CP').ToLower()
-	$ComponentType = ($ComponentType.ToLower()) -Replace "\b$cpSearch\b", 'AAM Credential Provider'
-	$PSMSearch = ('PSM').ToLower()
-	$ComponentType = $ComponentType.ToLower() -replace "\b$PSMSearch\b", 'PSM/PSMP'
+if ($AllComponentTypes) {
+    $selectedComponents = $componentList
+} elseif (![string]::IsNullOrEmpty($ComponentType)) {
+    $cpSearch = ('CP').ToLower()
+    $ComponentType = ($ComponentType.ToLower()) -replace "\b$cpSearch\b", 'AAM Credential Provider'
+    $PSMSearch = ('PSM').ToLower()
+    $ComponentType = $ComponentType.ToLower() -replace "\b$PSMSearch\b", 'PSM/PSMP'
 
-	$selectedComponents = $componentList | Where-Object 'Component Type' -EQ $ComponentType
+    $selectedComponents = $componentList | Where-Object 'Component Type' -EQ $ComponentType
+} else {
+    $selectedComponents = Invoke-SelectionMenu -Items @($componentList | Sort-Object $_.'Component Type') -Title 'Select Component(s)' -DisplayProperties 'Component Type', 'Amount Connected', 'Total Amount'
+    if ($selectedComponents.Count -eq 0) {
+        Write-LogMessage -type Info -MSG 'No components selected. Exiting.'
+        Invoke-Logoff
+        return
+    }
 }
-else {
-	$selectedComponents = Invoke-SelectionMenu -Items @($componentList | Sort-Object $_.'Component Type') -Title 'Select Component(s)' -DisplayProperties 'Component Type', 'Amount Connected', 'Total Amount'
-	if ($selectedComponents.Count -eq 0) {
-		Write-LogMessage -type Info -MSG 'No components selected. Exiting.'
-		Invoke-Logoff
-		return
-	}
-}
-If (![string]::IsNullOrEmpty($mapfile)) {
-	$map = Import-Csv $mapfile
+if (![string]::IsNullOrEmpty($mapfile)) {
+    $map = Import-Csv $mapfile
 }
 
 Write-LogMessage -type Verbose -MSG 'Getting Component List'
 $targetComponents = @()
 $availableServers = @()
-ForEach ($comp in $selectedComponents) {
-	if ($comp.'Total Amount' -gt 0) {
-		If ($PVWAURL.Contains('privilegecloud') -and ('PVWA' -eq $comp.'Component Type')) {
-			continue
-		}
-		$results = Get-ComponentDetails $comp.'Component Type'
-		ForEach ($result in $results) {
-			$user = ($result.'Component User')
-				switch ($user) {
-					{ 'PSMPApp' -eq $user.Substring(0, 7)} {
-						$result.'Component Type' = 'PSM'
-						Add-Member -InputObject $result -MemberType NoteProperty -Name 'OS' -Value 'Linux'
-						break
-					}
-					{'PSMApp'  -eq $user.Substring(0, 6) } {
-						$result.'Component Type' = 'PSM'
-						Add-Member -InputObject $result -MemberType NoteProperty -Name 'OS' -Value 'Windows'
-						break
-					}
-					Default {
-						Add-Member -InputObject $result -MemberType NoteProperty -Name 'OS' -Value 'Windows'
-						break
-					}
-				}
-			If ($null -ne $map) {
-				$checkComponentUser = $map.Where({ $_.ComponentUser -eq $result.'Component User' })
-				If (0 -ne $checkComponentUser.Count) {
-					if (![string]::IsNullOrEmpty($checkComponentUser.'IP Address')) {
-						$result.'IP Address' = $checkComponentUser.'IP Address'
-					}
-					if (![string]::IsNullOrEmpty($checkComponentUser.'Component Type')) {
-						$result.'Component Type' = $checkComponentUser.'Component Type'
-					}
-					if (![string]::IsNullOrEmpty($checkComponentUser.'OS')) {
-						$result.'OS' = $checkComponentUser.'OS'
-					}
-				}
-			}
-			If ('255.255.255.255' -eq $result.'IP Address') {
-				continue
-			}
-			$availableServers += $result
-		}
-	}
-	else {
-		Write-LogMessage -type Error -MSG "No $($comp.'Component Type') Components Found"
-	}
+foreach ($comp in $selectedComponents) {
+    if ($comp.'Total Amount' -gt 0) {
+        if ($PVWAURL.Contains('privilegecloud') -and ('PVWA' -eq $comp.'Component Type')) {
+            continue
+        }
+        $results = Get-ComponentDetails $comp.'Component Type'
+        foreach ($result in $results) {
+            $user = ($result.'Component User')
+            switch ($user) {
+                { 'PSMPApp' -eq $user.Substring(0, 7) } {
+                    $result.'Component Type' = 'PSM'
+                    Add-Member -InputObject $result -MemberType NoteProperty -Name 'OS' -Value 'Linux'
+                    break
+                }
+                { 'PSMApp' -eq $user.Substring(0, 6) } {
+                    $result.'Component Type' = 'PSM'
+                    Add-Member -InputObject $result -MemberType NoteProperty -Name 'OS' -Value 'Windows'
+                    break
+                }
+                default {
+                    Add-Member -InputObject $result -MemberType NoteProperty -Name 'OS' -Value 'Windows'
+                    break
+                }
+            }
+            if ($null -ne $map) {
+                $checkComponentUser = $map.Where({ $_.ComponentUser -eq $result.'Component User' })
+                if (0 -ne $checkComponentUser.Count) {
+                    if (![string]::IsNullOrEmpty($checkComponentUser.'IP Address')) {
+                        $result.'IP Address' = $checkComponentUser.'IP Address'
+                    }
+                    if (![string]::IsNullOrEmpty($checkComponentUser.'Component Type')) {
+                        $result.'Component Type' = $checkComponentUser.'Component Type'
+                    }
+                    if (![string]::IsNullOrEmpty($checkComponentUser.'OS')) {
+                        $result.'OS' = $checkComponentUser.'OS'
+                    }
+                }
+            }
+            if ('255.255.255.255' -eq $result.'IP Address') {
+                continue
+            }
+            $availableServers += $result
+        }
+    } else {
+        Write-LogMessage -type Error -MSG "No $($comp.'Component Type') Components Found"
+    }
 }
 
-If ($DisconnectedOnly) {
-	$targetComponents += $availableServers | Where-Object Connected -EQ $false
-}
-elseif ($ConnectedOnly) {
-	$targetComponents += $availableServers | Where-Object Connected -EQ $true
-}
-elseif ($allServers) {
-	$targetComponents += $availableServers
-}
-elseif (![string]::IsNullOrEmpty($ComponentUsers)) {
-	$ComponentUsersArr += $ComponentUsers.Split(',')
-	ForEach ($user in $ComponentUsersArr) {
-		$targetComponents += $availableServers | Where-Object 'Component User' -EQ $user
-	}
-}
-elseif (![string]::IsNullOrEmpty($ComponentUserFilter)) {
-	$targetComponents += $availableServers | Where-Object 'Component User' -Like $ComponentUserFilter
-}
-else {
-	$targetComponents += Invoke-SelectionMenu -Items @($availableServers | Sort-Object -Property 'Component Type', 'IP Address') -Title 'Select Server(s)' -DisplayProperties 'Component Type', 'IP Address', 'Component User'
-	if ($targetComponents.Count -eq 0) {
-		Write-LogMessage -type Info -MSG 'No servers selected. Exiting.'
-		Invoke-Logoff
-		return
-	}
+if ($DisconnectedOnly) {
+    $targetComponents += $availableServers | Where-Object Connected -EQ $false
+} elseif ($ConnectedOnly) {
+    $targetComponents += $availableServers | Where-Object Connected -EQ $true
+} elseif ($allServers) {
+    $targetComponents += $availableServers
+} elseif (![string]::IsNullOrEmpty($ComponentUsers)) {
+    $ComponentUsersArr += $ComponentUsers.Split(',')
+    foreach ($user in $ComponentUsersArr) {
+        $targetComponents += $availableServers | Where-Object 'Component User' -EQ $user
+    }
+} elseif (![string]::IsNullOrEmpty($ComponentUserFilter)) {
+    $targetComponents += $availableServers | Where-Object 'Component User' -Like $ComponentUserFilter
+} else {
+    $targetComponents += Invoke-SelectionMenu -Items @($availableServers | Sort-Object -Property 'Component Type', 'IP Address') -Title 'Select Server(s)' -DisplayProperties 'Component Type', 'IP Address', 'Component User'
+    if ($targetComponents.Count -eq 0) {
+        Write-LogMessage -type Info -MSG 'No servers selected. Exiting.'
+        Invoke-Logoff
+        return
+    }
 }
 
 Write-LogMessage -type Verbose -MSG 'Processing Lists'
@@ -1131,175 +1163,162 @@ $fn_NewPSLogon = ${function:New-PSLogon}
 Get-Job | Remove-Job -Force
 $FailureList = @()
 foreach ($target in $targetComponents | Sort-Object $comp.'Component Type') {
-	if (!$jobs) {
-		Write-LogMessage -type Info "Starting work on component user `"$($target.'Component User')`" with the component type of `"$($target.'Component Type')`" at the IP Address of `"$($target.'IP Address')`""
-		Write-LogMessage -type Verbose "Attempting to get FQDN of IP Address `"$($target.'IP Address')`""
-		$failed = $false
-		$fqdn = (Resolve-DnsName $target.'IP Address' -ErrorAction SilentlyContinue).namehost
-		If ([string]::IsNullOrEmpty($fqdn)) {
-			Write-LogMessage -type Warning "Unable to get FQDN of IP Address `"$($target.'IP Address')`". Using IP address for WinRM Connection."
-			$fqdn = $target.'IP Address'
-		}
-		Else {
-			Write-LogMessage -type Info "Found FQDN of `"$fqdn`" for IP Address `"$($target.'IP Address')`". Using FQDN for WinRM Connection."
-		}
-		if ((![string]::IsNullOrEmpty($oldDomain)) -and (![string]::IsNullOrEmpty($newDomain)) ) {
-			$fqdn = $fqdn.replace($oldDomain, $newDomain)
-		}
-		Try {
-			# If -RemoteCredential is provided, warn when the target server is not in TrustedHosts
-			if ($null -ne $RemoteCredential -and $null -ne $script:preFlight_TrustedHosts -and $script:preFlight_TrustedHosts -ne '*') {
-				$isCovered = ($script:preFlight_TrustedHosts.Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ -ieq $fqdn }).Count -gt 0
-				if (!$isCovered) {
-					Write-LogMessage -type Warning -MSG "$fqdn is not in WSMan:\localhost\Client\TrustedHosts. WinRM with explicit credentials may fail. Remediation: Set-Item WSMan:\localhost\Client\TrustedHosts -Value '$fqdn' -Force"
-				}
-			}
-			If ('Windows' -eq $target.os) {
-				If (!(Test-TargetWinRM -server $fqdn -Credential $RemoteCredential)) {
-					Write-LogMessage -type Error -MSG "WinRM connection failed for $fqdn. Run: .\Test-RemoteConnectivity.ps1 -ComputerName '$fqdn' to diagnose."
-					$failed = $true
-				}
-			}
-			elseif ('Linux' -eq $target.os) {
-				Write-LogMessage -type Error -MSG "Unable to reset credentials on linux based servers at this time. Manual reset required for Component User $($target.'Component User') on $fqdn" -Footer
-				$failed = $true
-			}
+    if (!$jobs) {
+        Write-LogMessage -type Info "Starting work on component user `"$($target.'Component User')`" with the component type of `"$($target.'Component Type')`" at the IP Address of `"$($target.'IP Address')`""
+        Write-LogMessage -type Verbose "Attempting to get FQDN of IP Address `"$($target.'IP Address')`""
+        $failed = $false
+        $fqdn = (Resolve-DnsName $target.'IP Address' -ErrorAction SilentlyContinue).namehost
+        if ([string]::IsNullOrEmpty($fqdn)) {
+            Write-LogMessage -type Warning "Unable to get FQDN of IP Address `"$($target.'IP Address')`". Using IP address for WinRM Connection."
+            $fqdn = $target.'IP Address'
+        } else {
+            Write-LogMessage -type Info "Found FQDN of `"$fqdn`" for IP Address `"$($target.'IP Address')`". Using FQDN for WinRM Connection."
+        }
+        if ((![string]::IsNullOrEmpty($oldDomain)) -and (![string]::IsNullOrEmpty($newDomain)) ) {
+            $fqdn = $fqdn.replace($oldDomain, $newDomain)
+        }
+        try {
+            # If -RemoteCredential is provided, warn when the target server is not in TrustedHosts
+            if ($null -ne $RemoteCredential -and $null -ne $script:preFlight_TrustedHosts -and $script:preFlight_TrustedHosts -ne '*') {
+                $isCovered = ($script:preFlight_TrustedHosts.Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ -ieq $fqdn }).Count -gt 0
+                if (!$isCovered) {
+                    Write-LogMessage -type Warning -MSG "$fqdn is not in WSMan:\localhost\Client\TrustedHosts. WinRM with explicit credentials may fail. Remediation: Set-Item WSMan:\localhost\Client\TrustedHosts -Value '$fqdn' -Force"
+                }
+            }
+            if ('Windows' -eq $target.os) {
+                if (!(Test-TargetWinRM -server $fqdn -Credential $RemoteCredential)) {
+                    Write-LogMessage -type Error -MSG "WinRM connection failed for $fqdn. Run: .\Test-RemoteConnectivity.ps1 -ComputerName '$fqdn' to diagnose."
+                    $failed = $true
+                }
+            } elseif ('Linux' -eq $target.os) {
+                Write-LogMessage -type Error -MSG "Unable to reset credentials on linux based servers at this time. Manual reset required for Component User $($target.'Component User') on $fqdn" -Footer
+                $failed = $true
+            }
 
-			if ($failed) {
-				$FailureList += $target
-				Write-LogMessage -type Error -MSG "Manual reset required for component user `"$($target.'Component User')`" with the component type of `"$($target.'Component Type')`" with address of `"$fqdn`"." -Footer
+            if ($failed) {
+                $FailureList += $target
+                Write-LogMessage -type Error -MSG "Manual reset required for component user `"$($target.'Component User')`" with the component type of `"$($target.'Component Type')`" with address of `"$fqdn`"." -Footer
 
-			}
-			else {
-				Reset-Credentials -ComponentType $target.'Component Type' -Server $fqdn -OS $target.os -vault $vaultAddress -apiAddress $apiAddress -tries $tries -Credential $RemoteCredential
-				if ($ShowLogs) {
-					Show-ComponentLog -Server $fqdn -ComponentType $target.'Component Type' -LogName $LogName -Tail $LogTail -Credential $RemoteCredential
-				}
-			}
-		}
-		Catch {
-			$FailureList += $target
-			Write-LogMessage -type Error -MSG "Failed processing `"$($target.'Component User')`" on `"$fqdn`": $($_.Exception.Message)"
-			if ($ShowLogs) {
-				Show-ComponentLog -Server $fqdn -ComponentType $target.'Component Type' -LogName $LogName -Tail $LogTail -Credential $RemoteCredential
-			}
-		}
-	}
-	else {
-		$user = $target.'Component User'
-		$type = $target.'Component Type'
-		$os = $target.os
-		$ipAddress = $target.'IP Address'
-		Write-LogMessage -type Info -MSG "Submitting job for component user `"$($target.'Component User')`" with the component type of `"$($target.'Component Type')`" at the IP Address of `"$($target.'IP Address')`""
-		Start-Job -Name "$($type.Replace('AAM Credential Provider','CP')) at $ipAddress" -ScriptBlock {
-			Try {
-				$Script:PVWAURL = $using:PVWAURL
-				$Script:LogonHeader = $using:logonHeader
-				$Script:LOG_FILE_PATH = $using:LOG_FILE_PATH
-				$Script:RemoteCredential = $using:RemoteCredential
-				$Script:WinRMUseSSL = $using:WinRMUseSSL
-				$Script:WinRMUseNonSSL = $using:WinRMUseNonSSL
-				$Script:CredCommands = $using:credCommands
-				$ScriptLocation = $using:ScriptLocation
+            } else {
+                Reset-Credentials -ComponentType $target.'Component Type' -Server $fqdn -OS $target.os -vault $vaultAddress -apiAddress $apiAddress -tries $tries -Credential $RemoteCredential
+                if ($ShowLogs) {
+                    Show-ComponentLog -Server $fqdn -ComponentType $target.'Component Type' -LogName $LogName -Tail $LogTail -Credential $RemoteCredential
+                }
+            }
+        } catch {
+            $FailureList += $target
+            Write-LogMessage -type Error -MSG "Failed processing `"$($target.'Component User')`" on `"$fqdn`": $($_.Exception.Message)"
+            if ($ShowLogs) {
+                Show-ComponentLog -Server $fqdn -ComponentType $target.'Component Type' -LogName $LogName -Tail $LogTail -Credential $RemoteCredential
+            }
+        }
+    } else {
+        $user = $target.'Component User'
+        $type = $target.'Component Type'
+        $os = $target.os
+        $ipAddress = $target.'IP Address'
+        Write-LogMessage -type Info -MSG "Submitting job for component user `"$($target.'Component User')`" with the component type of `"$($target.'Component Type')`" at the IP Address of `"$($target.'IP Address')`""
+        Start-Job -Name "$($type.Replace('AAM Credential Provider','CP')) at $ipAddress" -ScriptBlock {
+            try {
+                $Script:PVWAURL = $using:PVWAURL
+                $Script:LogonHeader = $using:logonHeader
+                $Script:LOG_FILE_PATH = $using:LOG_FILE_PATH
+                $Script:RemoteCredential = $using:RemoteCredential
+                $Script:WinRMUseSSL = $using:WinRMUseSSL
+                $Script:WinRMUseNonSSL = $using:WinRMUseNonSSL
+                $Script:CredCommands = $using:credCommands
+                $ScriptLocation = $using:ScriptLocation
 
-				# Reconstruct URL variables  -  these are computed at the top of the parent script
-				# but are not in scope inside a background job.
-				$Script:URL_UserSearch        = $Script:PVWAURL + '/api/Users?filter=componentUser&search={0}'
-				$Script:URL_UserResetPassword = $Script:PVWAURL + '/api/Users/{0}/ResetPassword'
-				$Script:URL_Activate          = $Script:PVWAURL + '/api/Users/{0}/Activate'
+                # Reconstruct URL variables  -  these are computed at the top of the parent script
+                # but are not in scope inside a background job.
+                $Script:URL_UserSearch = $Script:PVWAURL + '/api/Users?filter=componentUser&search={0}'
+                $Script:URL_UserResetPassword = $Script:PVWAURL + '/api/Users/{0}/ResetPassword'
+                $Script:URL_Activate = $Script:PVWAURL + '/api/Users/{0}/Activate'
 
-				. "$using:ScriptLocation\Reset-WinComponentCredential.ps1"
+                . "$using:ScriptLocation\Reset-WinComponentCredential.ps1"
 
-				${function:Write-LogMessage} = $using:fn_WriteLogMessage
-				${function:Join-ExceptionMessage} = $using:fn_JoinExceptionMessage
-				${function:Invoke-Rest} = $using:fn_InvokeRest
-				${function:Set-UserPassword} = $using:fn_SetUserPassword
-				${function:Reset-Credentials} = $using:fn_ResetCredentials
-				${function:Reset-WinComponent} = $using:fn_ResetWinComponent
-				${function:Get-ComponentInfo} = $using:fn_GetComponentInfo
-				${function:Test-TargetWinRM} = $using:fn_TestTargetWinRM
-				${function:New-PSLogon} = $using:fn_NewPSLogon
-				$fqdn = (Resolve-DnsName $using:target.'IP Address' -ErrorAction SilentlyContinue).namehost
-				If ([string]::IsNullOrEmpty($fqdn)) {
-					$fqdn = $using:target.'IP Address'
-				}
-				if ((![string]::IsNullOrEmpty($using:oldDomain)) -and (![string]::IsNullOrEmpty($using:newDomain)) ) {
-					$fqdn = $fqdn.replace($using:oldDomain, $using:newDomain)
-				}
-				If ('Windows' -eq $using:target.os) {
-					If (!(Test-TargetWinRM -server $fqdn -Credential $using:RemoteCredential)) {
-						Write-LogMessage -Type Error -MSG "Error connecting to WinRM for Component User $($using:target.'Component User') on $fqdn" -Footer
-						Throw 'the job has failed'
-					}
-				}
-				elseif ('Linux' -eq $using:target.os) {
-					Write-LogMessage -type Error -MSG "Unable to reset credentials on linux based servers at this time. Manual reset required for Component User $($using:target.'Component User') on $fqdn" -Footer
-					Throw 'the job has failed'
-				}
-				Reset-Credentials -ComponentType $using:type -Server $fqdn -os $using:os -vault $using:vaultAddress -apiAddress $using:apiAddress -tries $using:tries -Credential $using:RemoteCredential
-			}
-			Catch {
-				Write-LogMessage -Type Error -MSG "Error in job for $using:Type on $fqdn" -Footer
-				Throw  "Error in job for $using:Type on $fqdn"
-			}
-		} -InitializationScript { Set-Location $PSScriptRoot; } | Out-Null
-		$jobsRunning = $true
-	}
+                ${function:Write-LogMessage} = $using:fn_WriteLogMessage
+                ${function:Join-ExceptionMessage} = $using:fn_JoinExceptionMessage
+                ${function:Invoke-Rest} = $using:fn_InvokeRest
+                ${function:Set-UserPassword} = $using:fn_SetUserPassword
+                ${function:Reset-Credentials} = $using:fn_ResetCredentials
+                ${function:Reset-WinComponent} = $using:fn_ResetWinComponent
+                ${function:Get-ComponentInfo} = $using:fn_GetComponentInfo
+                ${function:Test-TargetWinRM} = $using:fn_TestTargetWinRM
+                ${function:New-PSLogon} = $using:fn_NewPSLogon
+                $fqdn = (Resolve-DnsName $using:target.'IP Address' -ErrorAction SilentlyContinue).namehost
+                if ([string]::IsNullOrEmpty($fqdn)) {
+                    $fqdn = $using:target.'IP Address'
+                }
+                if ((![string]::IsNullOrEmpty($using:oldDomain)) -and (![string]::IsNullOrEmpty($using:newDomain)) ) {
+                    $fqdn = $fqdn.replace($using:oldDomain, $using:newDomain)
+                }
+                if ('Windows' -eq $using:target.os) {
+                    if (!(Test-TargetWinRM -server $fqdn -Credential $using:RemoteCredential)) {
+                        Write-LogMessage -type Error -MSG "Error connecting to WinRM for Component User $($using:target.'Component User') on $fqdn" -Footer
+                        throw 'the job has failed'
+                    }
+                } elseif ('Linux' -eq $using:target.os) {
+                    Write-LogMessage -Type Error -MSG "Unable to reset credentials on linux based servers at this time. Manual reset required for Component User $($using:target.'Component User') on $fqdn" -Footer
+                    throw 'the job has failed'
+                }
+                Reset-Credentials -ComponentType $using:type -Server $fqdn -os $using:os -vault $using:vaultAddress -apiAddress $using:apiAddress -tries $using:tries -Credential $using:RemoteCredential
+            } catch {
+                Write-LogMessage -type Error -MSG "Error in job for $using:Type on $fqdn" -Footer
+                throw  "Error in job for $using:Type on $fqdn"
+            }
+        } -InitializationScript { Set-Location $PSScriptRoot; } | Out-Null
+        $jobsRunning = $true
+    }
 }
 
-IF ($jobs) {
-	Write-LogMessage -type info -MSG "$($targetComponents.count) jobs submitted for processing" -Footer -Header
-	Start-Sleep -Seconds 1
-	$stat = 0
-	While ($jobsRunning) {
-		$running = @(Get-Job | Where-Object { $_.State -eq 'Running' })
-		$failed = @(Get-Job | Where-Object { $_.State -eq 'Failed' })
-		if ($stat -ge 100) {
-			$stat = 0
-		}
-		Else {
-			$stat += 1
-		}
+if ($jobs) {
+    Write-LogMessage -type info -MSG "$($targetComponents.count) jobs submitted for processing" -Footer -Header
+    Start-Sleep -Seconds 1
+    $stat = 0
+    while ($jobsRunning) {
+        $running = @(Get-Job | Where-Object { $_.State -eq 'Running' })
+        $failed = @(Get-Job | Where-Object { $_.State -eq 'Failed' })
+        if ($stat -ge 100) {
+            $stat = 0
+        } else {
+            $stat += 1
+        }
 
-		if ($running.Count -eq 0) {
-			$jobsRunning = $false
-		}
-		elseif ($running.Count -eq 1 -and $failed.Count -eq 0) {
-			$Activity = "$($running.count) job is still running"
-		}
-		elseif ($running.Count -gt 1 -and $failed.Count -eq 0) {
-			$Activity = "$($running.count) jobs are still running"
-		}
-		elseif ($failed.count -eq 1) {
-			$Activity = "$($failed.count) job is in a failed state and $($running.count) job(s) are still running. Review logs once completed"
-		}
-		elseif ($failed.count -gt 1) {
-			$Activity = "$($failed.count) jobs are in a failed state and $($running.count) job(s) are still running. Review logs once completed"
-		}
-		If ($jobsRunning) {
-			Write-Progress -Id 1 -Activity $Activity -CurrentOperation "$($running.Name)"
-		}
-	}
-	Write-Progress -Id 1 -Activity $Activity -CurrentOperation "$($running.Name)" -Completed
+        if ($running.Count -eq 0) {
+            $jobsRunning = $false
+        } elseif ($running.Count -eq 1 -and $failed.Count -eq 0) {
+            $Activity = "$($running.count) job is still running"
+        } elseif ($running.Count -gt 1 -and $failed.Count -eq 0) {
+            $Activity = "$($running.count) jobs are still running"
+        } elseif ($failed.count -eq 1) {
+            $Activity = "$($failed.count) job is in a failed state and $($running.count) job(s) are still running. Review logs once completed"
+        } elseif ($failed.count -gt 1) {
+            $Activity = "$($failed.count) jobs are in a failed state and $($running.count) job(s) are still running. Review logs once completed"
+        }
+        if ($jobsRunning) {
+            Write-Progress -Id 1 -Activity $Activity -CurrentOperation "$($running.Name)"
+        }
+    }
+    Write-Progress -Id 1 -Activity $Activity -CurrentOperation "$($running.Name)" -Completed
 
-	Write-LogMessage -type Info -MSG 'All Jobs Completed' -Header -Footer
-	$errorJobs = Get-Job -State Failed
-	If (![string]::IsNullOrEmpty($errorJobs)) {
-		Foreach ($job in $errorJobs) {
-			Write-LogMessage -type Error "Log started for $($job.name)" -Header
-			$child = $job.childjobs.information
-			ForEach ($line in $child) {
-				Write-LogMessage -type Error $line
-			}
-			Write-LogMessage -type Error -MSG "Log ended for $($job.name)" -Footer
-		}
-	}
-}
-Else {
-	If (![string]::IsNullOrEmpty($FailureList)) {
-		Write-Host "Error on the following $($FailureList.count) components" -ForegroundColor Red
-		$FailureList | Select-Object -Property 'IP Address', 'Component Type', 'Component User' | Sort-Object 'IP Address', 'Component Type', 'Component User' | Format-Table -AutoSize
-	}
+    Write-LogMessage -type Info -MSG 'All Jobs Completed' -Header -Footer
+    $errorJobs = Get-Job -State Failed
+    if (![string]::IsNullOrEmpty($errorJobs)) {
+        foreach ($job in $errorJobs) {
+            Write-LogMessage -type Error "Log started for $($job.name)" -Header
+            $child = $job.childjobs.information
+            foreach ($line in $child) {
+                Write-LogMessage -type Error $line
+            }
+            Write-LogMessage -type Error -MSG "Log ended for $($job.name)" -Footer
+        }
+    }
+} else {
+    if (![string]::IsNullOrEmpty($FailureList)) {
+        Write-Host "Error on the following $($FailureList.count) components" -ForegroundColor Red
+        $FailureList | Select-Object -Property 'IP Address', 'Component Type', 'Component User' | Sort-Object 'IP Address', 'Component Type', 'Component User' | Format-Table -AutoSize
+    }
 }
 
 #region [Logoff]
