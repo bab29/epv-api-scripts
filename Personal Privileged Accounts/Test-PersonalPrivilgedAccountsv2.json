@@ -1,0 +1,22 @@
+{
+    "SafeConfigSet": {
+        "default": {
+            "CPMName": "PasswordManager",
+            "NumberOfDaysRetention": 7,
+            "SafeNamePattern": "*_ADM",
+            "DefaultSafeMembers": []
+        },
+        "alt": {
+            "NumberOfDaysRetention": 14
+        }
+    },
+    "UserConfigSet": {
+        "default": {
+            "accountPlatform": "<AccountPlatform>",
+            "accountUserPattern": "*_adm",
+            "accountAddress": "testenv.corp.com",
+            "enableAutoMgmt": "yes"
+        }
+    },
+    "RoleConfigSet": {}
+}

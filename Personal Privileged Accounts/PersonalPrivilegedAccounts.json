@@ -1,0 +1,149 @@
+{
+    "SafeConfigSet": {
+        "default": {
+            "CPMName": "PasswordManager",
+            "NumberOfDaysRetention": 7,
+            "SafeNamePattern": "*_ADM",
+            "DefaultSafeMembers": [
+                {
+                    "Name": "AdminGroup",
+                    "Role": "Full",
+                    "SearchIn": "Vault"
+                },
+                {
+                    "Name": "AuditGroup",
+                    "RoleConfigSet": "CustomAudit",
+                    "SearchIn": "Vault"
+                },
+                {
+                    "Name": "SpecialGroup",
+                    "SearchIn": "Vault",
+                    "Permissions": {
+                        "useAccounts": true,
+                        "retrieveAccounts": false,
+                        "listAccounts": true,
+                        "addAccounts": false,
+                        "updateAccountContent": false,
+                        "updateAccountProperties": false,
+                        "initiateCPMAccountManagementOperations": false,
+                        "specifyNextAccountContent": false,
+                        "renameAccounts": false,
+                        "deleteAccounts": false,
+                        "unlockAccounts": false,
+                        "manageSafe": false,
+                        "manageSafeMembers": false,
+                        "backupSafe": false,
+                        "viewAuditLog": false,
+                        "viewSafeMembers": false,
+                        "accessWithoutConfirmation": false,
+                        "createFolders": false,
+                        "deleteFolders": false,
+                        "moveAccountsAndFolders": false,
+                        "requestsAuthorizationLevel1": false,
+                        "requestsAuthorizationLevel2": false
+                    }
+                }
+            ]
+        },
+        "prod": {
+            "CPMName": "PasswordManager_Prod",
+            "NumberOfVersionsRetention": 10,
+            "SafeNamePattern": "*_ADM",
+            "DefaultSafeMembers": [
+                {
+                    "Name": "ProdAdmins",
+                    "Role": "Full",
+                    "SearchIn": "Vault"
+                },
+                {
+                    "Name": "ProdAuditors",
+                    "RoleConfigSet": "CustomAudit",
+                    "SearchIn": "Vault"
+                }
+            ]
+        },
+        "dev": {
+            "CPMName": "PasswordManager_Dev",
+            "NumberOfDaysRetention": 30,
+            "SafeNamePattern": "*_DEV",
+            "DefaultSafeMembers": [
+                {
+                    "Name": "DevAdmins",
+                    "Role": "AccountsManager",
+                    "SearchIn": "Vault"
+                }
+            ]
+        }
+    },
+    "UserConfigSet": {
+        "default": {
+            "accountPlatform": "WinDomain",
+            "accountUserPattern": "*_adm",
+            "accountAddress": "corp.example.com",
+            "enableAutoMgmt": "yes"
+        },
+        "prod": {
+            "accountPlatform": "WinDomain",
+            "accountUserPattern": "*_adm",
+            "accountAddress": "prod.example.com",
+            "enableAutoMgmt": "yes"
+        },
+        "dev": {
+            "accountPlatform": "WinDomain",
+            "accountUserPattern": "*_adm",
+            "accountAddress": "dev.example.com",
+            "enableAutoMgmt": "no",
+            "manualMgmtReason": "Managed externally in dev"
+        }
+    },
+    "RoleConfigSet": {
+        "CustomAudit": {
+            "useAccounts": false,
+            "retrieveAccounts": false,
+            "listAccounts": true,
+            "addAccounts": false,
+            "updateAccountContent": false,
+            "updateAccountProperties": false,
+            "initiateCPMAccountManagementOperations": false,
+            "specifyNextAccountContent": false,
+            "renameAccounts": false,
+            "deleteAccounts": false,
+            "unlockAccounts": false,
+            "manageSafe": false,
+            "manageSafeMembers": false,
+            "backupSafe": false,
+            "viewAuditLog": true,
+            "viewSafeMembers": true,
+            "accessWithoutConfirmation": false,
+            "createFolders": false,
+            "deleteFolders": false,
+            "moveAccountsAndFolders": false,
+            "requestsAuthorizationLevel1": false,
+            "requestsAuthorizationLevel2": false
+        },
+        "UseAndRetrieve": {
+            "useAccounts": true,
+            "retrieveAccounts": true,
+            "listAccounts": true,
+            "addAccounts": false,
+            "updateAccountContent": false,
+            "updateAccountProperties": false,
+            "initiateCPMAccountManagementOperations": false,
+            "specifyNextAccountContent": false,
+            "renameAccounts": false,
+            "deleteAccounts": false,
+            "unlockAccounts": false,
+            "manageSafe": false,
+            "manageSafeMembers": false,
+            "backupSafe": false,
+            "viewAuditLog": true,
+            "viewSafeMembers": false,
+            "accessWithoutConfirmation": false,
+            "createFolders": false,
+            "deleteFolders": false,
+            "moveAccountsAndFolders": false,
+            "requestsAuthorizationLevel1": false,
+            "requestsAuthorizationLevel2": false
+        }
+    }
+}
