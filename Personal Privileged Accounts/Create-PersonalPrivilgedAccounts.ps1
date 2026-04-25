@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     Creates personal privileged accounts and their dedicated safes in CyberArk using the v2 REST API.
@@ -17,7 +17,7 @@
     (pass a pre-obtained PCloud token via -logonToken).
 .PARAMETER PVWAURL
     Base URL of the CyberArk PVWA (e.g. https://pvwa.company.com/PasswordVault).
-    Not required when -logonToken is a PCloud header hashtable.
+    Always required. The URL is never embedded in a logon token and must be supplied separately.
 .PARAMETER AuthenticationType
     Authentication type for on-premises logon: cyberark | ldap | radius. Default: cyberark.
 .PARAMETER OTP
@@ -56,6 +56,18 @@
     config file, log a warning and fall back to the base resolved config instead of skipping
     the row. By default (without this switch) an invalid set name is treated as an error
     and the row is skipped.
+.PARAMETER AllowDuplicateAccounts
+    When an existing safe already contains an account with the same userName, address and
+    platformId, allow a second account to be created. Without this switch (the default)
+    the script checks for a matching account in any existing safe before onboarding; if a
+    duplicate is found it logs a warning and skips that row.
+    Note: this check is only performed for safes that already exist. When the safe is newly
+    created there can be no existing accounts, so no check is needed.
+.PARAMETER CreateSafeOnly
+    Create the safe and add all configured members, but do not onboard any account.
+    The userName column is still required to set the safe name pattern and safe owner.
+    Can also be set per-row via a CSV 'createSafeOnly' column, or per UserConfigSet via
+    Options.createSafeOnly in the config file.
 .OUTPUTS
     None. Progress and results are written to the log file and console.
 .EXAMPLE
@@ -74,14 +86,16 @@
 
     Applies the "prod" named config sets for safe and user settings.
 .EXAMPLE
+    $PCloudURL = 'https://tenant.privilegecloud.cyberark.cloud/PasswordVault'
     $identityParams = @{
-        IdentityTenantURL   = 'https://tenant.id.cyberark.cloud'
-        PCloudTenantAPIURL  = 'https://tenant.privilegecloud.cyberark.cloud'
+        IdentityTenantURL  = 'https://tenant.id.cyberark.cloud'
+        PCloudTenantAPIURL = 'https://tenant.privilegecloud.cyberark.cloud'
     }
     $token = Get-IdentityHeader @identityParams
-    .\Create-PersonalPrivilgedAccounts.ps1 -logonToken $token -CSVPath .\accounts.csv
+    .\Create-PersonalPrivilgedAccounts.ps1 -logonToken $token -PVWAURL $PCloudURL -CSVPath .\accounts.csv
 
     Uses a pre-obtained Privilege Cloud token; no logon/logoff is performed.
+    PVWAURL must always be supplied — it is never embedded in the token.
 .NOTES
     Version:       2.0
     Requires:      PowerShell 5.1+, CyberArk PVWA v12.1+ (v2 REST API)
@@ -155,6 +169,14 @@ param
         HelpMessage = 'When a CSV row names a SafeConfigSet or UserConfigSet that does not exist, warn and fall back to base config instead of skipping the row.')]
     [switch]$FallbackOnInvalidConfigSet,
 
+    [Parameter(Mandatory = $false,
+        HelpMessage = 'Allow a second account with the same userName/address/platformId to be onboarded into an existing safe. By default duplicates are detected and skipped.')]
+    [switch]$AllowDuplicateAccounts,
+
+    [Parameter(Mandatory = $false,
+        HelpMessage = 'Create the safe and members only; do not onboard any account. userName is still required for safe naming and ownership. Can also be set per-row (CSV column) or per UserConfigSet (Options.createSafeOnly).')]
+    [switch]$CreateSafeOnly,
+
     #region Troubleshooting parameters
     [Parameter(Mandatory = $false, DontShow = $true,
         HelpMessage = 'Write a separate verbose log file alongside the main log. Intended for deep troubleshooting only.')]
@@ -165,7 +187,7 @@ param
 # Get Script Location
 $ScriptFullPath = $MyInvocation.MyCommand.Path
 $ScriptLocation = Split-Path -Parent $ScriptFullPath
-$scriptParamsStr        = ($PSBoundParameters.GetEnumerator() | ForEach-Object { '-{0} ''{1}''' -f $PSItem.Key, $PSItem.Value }) -join ' '
+$scriptParamsStr = ($PSBoundParameters.GetEnumerator() | ForEach-Object { '-{0} ''{1}''' -f $PSItem.Key, $PSItem.Value }) -join ' '
 $script:g_ScriptCommand = '{0} {1}' -f $ScriptFullPath, $scriptParamsStr
 
 # Script Version
@@ -174,35 +196,36 @@ $ScriptVersion = '2.0'
 # Set Log file path
 $LOG_FILE_PATH = "$ScriptLocation\PersonalPrivilegedAccounts.log"
 
-$InDebug   = $PSBoundParameters.Debug.IsPresent
+$InDebug = $PSBoundParameters.Debug.IsPresent
 $InVerbose = $PSBoundParameters.Verbose.IsPresent
 
 # Baseline defaults (lowest priority - overridden by config then by parameters)
-$script:DEFAULT_CPM_NAME         = 'PasswordManager'
-$script:DEFAULT_DAYS_RETENTION   = 7
-$script:DEFAULT_SAFE_PATTERN     = '*_ADM'
-$script:DEFAULT_PLATFORM_ID      = 'WinDomain'
+$script:DEFAULT_CPM_NAME = 'PasswordManager'
+$script:DEFAULT_DAYS_RETENTION = 7
+$script:DEFAULT_SAFE_PATTERN = '*_ADM'
+$script:DEFAULT_PLATFORM_ID = 'WinDomain'
 
 # Global script state
-$script:g_LogonHeader    = $null
-$script:g_SSLChanged     = $false
+$script:g_LogonHeader = $null
+$script:g_SSLChanged = $false
 $script:g_LogAccountName = ''
 $script:g_CsvDefaultPath = Join-Path -Path ([Environment]::GetFolderPath('UserProfile')) -ChildPath 'Downloads'
-$script:g_DefaultUsers   = @('Master', 'Batch', 'Backup Users', 'Auditors', 'Operators', 'DR Users',
+$script:g_DefaultUsers = @('Master', 'Batch', 'Backup Users', 'Auditors', 'Operators', 'DR Users',
     'Notification Engines', 'PVWAGWAccounts', 'PVWAGWUser', 'PVWAAppUser', 'PasswordManager')
-$script:g_ShouldLogoff   = $true   # set to $false when $logonToken is passed in
-$script:Config           = $null   # populated by Import-ScriptConfig
-$script:g_JsonContent    = $null   # raw parsed JSON; retained for per-row config lookups
+$script:g_ShouldLogoff = $true   # set to $false when $logonToken is passed in
+$script:Config = $null   # populated by Import-ScriptConfig
+$script:g_JsonContent = $null   # raw parsed JSON; retained for per-row config lookups
 
 # Global URLs - populated by Initialize-ScriptURLs after PVWA URL is normalized
-$script:URL_PVWAAPI          = $null
-$script:URL_Logon            = $null
-$script:URL_Logoff           = $null
-$script:URL_Safes            = $null
-$script:URL_SafeDetails      = $null
-$script:URL_SafeMembers      = $null
-$script:URL_BulkAccounts     = $null
+$script:URL_PVWAAPI = $null
+$script:URL_Logon = $null
+$script:URL_Logoff = $null
+$script:URL_Safes = $null
+$script:URL_SafeDetails = $null
+$script:URL_SafeMembers = $null
+$script:URL_BulkAccounts = $null
 $script:URL_BulkAccountsTask = $null
+$script:URL_Accounts = $null
 
 #region Functions
 
@@ -235,11 +258,9 @@ function Remove-SensitiveData {
         $checkFor | ForEach-Object {
             if ($cleanedMessage -imatch "[{\\""']{2,}\s{0,}$PSitem\s{0,}[\\""']{2,}\s{0,}[:=][\\""']{2,}\s{0,}(?<Sensitive>.*?)\s{0,}[\\""']{2,}(?=[,:;])") {
                 $cleanedMessage = $cleanedMessage.Replace($Matches['Sensitive'], '****')
-            }
-            elseif ($cleanedMessage -imatch "[""']{1,}\s{0,}$PSitem\s{0,}[""']{1,}\s{0,}[:=][""']{1,}\s{0,}(?<Sensitive>.*?)\s{0,}[""']{1,}") {
+            } elseif ($cleanedMessage -imatch "[""']{1,}\s{0,}$PSitem\s{0,}[""']{1,}\s{0,}[:=][""']{1,}\s{0,}(?<Sensitive>.*?)\s{0,}[""']{1,}") {
                 $cleanedMessage = $cleanedMessage.Replace($Matches['Sensitive'], '****')
-            }
-            elseif ($cleanedMessage -imatch "(?:\s{0,}$PSitem\s{0,}[:=])\s{0,}(?<Sensitive>.*?)(?=; |:|,|}|\))") {
+            } elseif ($cleanedMessage -imatch "(?:\s{0,}$PSitem\s{0,}[:=])\s{0,}(?<Sensitive>.*?)(?=; |:|,|}|\))") {
                 $cleanedMessage = $cleanedMessage.Replace($Matches['Sensitive'], '****')
             }
         }
@@ -249,7 +270,7 @@ function Remove-SensitiveData {
     }
 }
 
-Function Write-LogMessage {
+function Write-LogMessage {
     <#
 .SYNOPSIS
     Method to log a message on screen and in a log file.
@@ -290,20 +311,21 @@ Function Write-LogMessage {
 
     $verboseFile = $($LOG_FILE_PATH.replace('.log', '_Verbose.log'))
     try {
-        If ($Header) {
+        if ($Header) {
             '=======================================' | Out-File -Append -FilePath $LOG_FILE_PATH
             Write-Host '======================================='
-        }
-        ElseIf ($SubHeader) {
+        } elseif ($SubHeader) {
             '------------------------------------' | Out-File -Append -FilePath $LOG_FILE_PATH
             Write-Host '------------------------------------'
         }
 
-        $LogTime    = "[$(Get-Date -Format 'yyyy-MM-dd hh:mm:ss')]`t"
+        $LogTime = "[$(Get-Date -Format 'yyyy-MM-dd hh:mm:ss')]`t"
         $msgToWrite = "$LogTime"
         $writeToFile = $true
 
-        if ([string]::IsNullOrEmpty($Msg)) { $Msg = 'N/A' }
+        if ([string]::IsNullOrEmpty($Msg)) {
+            $Msg = 'N/A'
+        }
         $Msg = Remove-SensitiveData -message $Msg
 
         switch ($type) {
@@ -314,20 +336,25 @@ Function Write-LogMessage {
             'Warning' {
                 Write-Host $MSG -ForegroundColor DarkYellow
                 $msgToWrite += "[WARNING]`t$Msg"
-                if ($UseVerboseFile) { $msgToWrite | Out-File -Append -FilePath $verboseFile }
+                if ($UseVerboseFile) {
+                    $msgToWrite | Out-File -Append -FilePath $verboseFile
+                }
             }
             'Error' {
                 Write-Host $MSG -ForegroundColor Red
                 $msgToWrite += "[ERROR]`t`t$Msg"
-                if ($UseVerboseFile) { $msgToWrite | Out-File -Append -FilePath $verboseFile }
+                if ($UseVerboseFile) {
+                    $msgToWrite | Out-File -Append -FilePath $verboseFile
+                }
             }
             'Debug' {
                 if ($InDebug -or $InVerbose) {
                     Write-Debug $MSG
                     $writeToFile = $true
                     $msgToWrite += "[DEBUG]`t`t$Msg"
+                } else {
+                    $writeToFile = $false
                 }
-                else { $writeToFile = $false }
             }
             'Verbose' {
                 if ($InVerbose -or $UseVerboseFile) {
@@ -343,14 +370,17 @@ Function Write-LogMessage {
                             Get-PSCallStack | ForEach-Object {
                                 if ($PSItem.Command -notin $excludeItems) {
                                     $command = $PSItem.Command
-                                    if ($command -eq $Global:scriptName) { $command = 'Base' }
-                                    elseif ([string]::IsNullOrEmpty($command)) { $command = '**Blank**' }
+                                    if ($command -eq $Global:scriptName) {
+                                        $command = 'Base'
+                                    } elseif ([string]::IsNullOrEmpty($command)) {
+                                        $command = '**Blank**'
+                                    }
                                     $stack = $stack + "$command $($PSItem.Location); "
                                 }
                             }
                             return $stack
                         }
-                        $stack    = Get-CallStack
+                        $stack = Get-CallStack
                         $stackMsg = "CallStack:`t$stack"
                         $arrStack = $stackMsg.split(":`t", 2)
                         if ($arrStack.Count -gt 1) {
@@ -359,25 +389,32 @@ Function Write-LogMessage {
                         Write-Verbose $stackMsg
                         $msgToWrite += "`n$LogTime[STACK]`t`t$stackMsg"
                     }
-                    if ($InVerbose) { Write-Verbose $MSG }
-                    else { $writeToFile = $false }
-                    if ($UseVerboseFile) { $msgToWrite | Out-File -Append -FilePath $verboseFile }
+                    if ($InVerbose) {
+                        Write-Verbose $MSG
+                    } else {
+                        $writeToFile = $false
+                    }
+                    if ($UseVerboseFile) {
+                        $msgToWrite | Out-File -Append -FilePath $verboseFile
+                    }
+                } else {
+                    $writeToFile = $false
                 }
-                else { $writeToFile = $false }
             }
         }
-        if ($writeToFile) { $msgToWrite | Out-File -Append -FilePath $LOG_FILE_PATH }
-        If ($Footer) {
+        if ($writeToFile) {
+            $msgToWrite | Out-File -Append -FilePath $LOG_FILE_PATH
+        }
+        if ($Footer) {
             '=======================================' | Out-File -Append -FilePath $LOG_FILE_PATH
             Write-Host '======================================='
         }
-    }
-    catch {
+    } catch {
         Write-Error "Error writing log: $($PSItem.Exception.Message)"
     }
 }
 
-Function Join-ExceptionMessage {
+function Join-ExceptionMessage {
     <#
 .SYNOPSIS
     Formats an exception and all inner exceptions into a single readable string.
@@ -395,7 +432,7 @@ Function Join-ExceptionMessage {
     )
     $msg = 'Source:{0}; Message: {1}' -f $e.Source, $e.Message
     while ($e.InnerException) {
-        $e    = $e.InnerException
+        $e = $e.InnerException
         $msg += "`n`t->Source:{0}; Message: {1}" -f $e.Source, $e.Message
     }
     return $msg
@@ -422,8 +459,7 @@ function Format-PVWAURL {
         if ('http://' -eq $Matches['scheme']) {
             $PVWAURL = $PVWAURL.Replace('http://', 'https://')
             Write-LogMessage -type Warning -MSG "Detected insecure URL scheme. Updated to: $PVWAURL"
-        }
-        elseif ([string]::IsNullOrEmpty($Matches['scheme'])) {
+        } elseif ([string]::IsNullOrEmpty($Matches['scheme'])) {
             $PVWAURL = "https://$PVWAURL"
             Write-LogMessage -type Warning -MSG "Detected missing URL scheme. Updated to: $PVWAURL"
         }
@@ -431,10 +467,13 @@ function Format-PVWAURL {
     if ($PVWAURL -match '^(?:https|http):\/\/(?<sub>.*).cyberark.(?<top>cloud|com)\/privilegecloud.*$') {
         $PVWAURL = "https://$($Matches['sub']).privilegecloud.cyberark.$($Matches['top'])/PasswordVault/"
         Write-LogMessage -type Warning -MSG "Detected improperly formatted Privilege Cloud URL. Updated to: $PVWAURL"
-    }
-    elseif ($PVWAURL -notmatch '^.*PasswordVault(?:\/|)$') {
+    } elseif ($PVWAURL -notmatch '^.*PasswordVault(?:\/|)$') {
         $PVWAURL = "$PVWAURL/PasswordVault/"
         Write-LogMessage -type Warning -MSG "Detected missing /PasswordVault/. Updated to: $PVWAURL"
+    }
+    # Ensure URL always ends with a trailing slash so URL concatenation works correctly
+    if (-not $PVWAURL.EndsWith('/')) {
+        $PVWAURL = "$PVWAURL/"
     }
     return $PVWAURL
 }
@@ -447,15 +486,16 @@ function Initialize-ScriptURLs {
     Populates script-scoped URL variables used by all Invoke-Rest calls.
     Must be called after $PVWAURL has been normalized by Format-PVWAURL.
 #>
-    $script:URL_PVWAAPI  = $PVWAURL + 'api/'
-    $authBase            = $script:URL_PVWAAPI + 'auth'
-    $script:URL_Logon    = $authBase + "/$AuthenticationType/Logon"
-    $script:URL_Logoff   = $authBase + '/Logoff'
-    $script:URL_Safes            = $script:URL_PVWAAPI + 'Safes'
-    $script:URL_SafeDetails      = $script:URL_Safes + '/{0}'
-    $script:URL_SafeMembers      = $script:URL_SafeDetails + '/Members'
-    $script:URL_BulkAccounts     = $script:URL_PVWAAPI + 'BulkActions/Accounts'
+    $script:URL_PVWAAPI = $PVWAURL + 'api/'
+    $authBase = $script:URL_PVWAAPI + 'auth'
+    $script:URL_Logon = $authBase + "/$AuthenticationType/Logon"
+    $script:URL_Logoff = $authBase + '/Logoff'
+    $script:URL_Safes = $script:URL_PVWAAPI + 'Safes'
+    $script:URL_SafeDetails = $script:URL_Safes + '/{0}'
+    $script:URL_SafeMembers = $script:URL_SafeDetails + '/Members'
+    $script:URL_BulkAccounts = $script:URL_PVWAAPI + 'BulkActions/Accounts'
     $script:URL_BulkAccountsTask = $script:URL_PVWAAPI + 'BulkActions/Accounts/{0}'
+    $script:URL_Accounts = $script:URL_PVWAAPI + 'Accounts'
     Write-LogMessage -type Debug -MSG "URLs initialized. Base API: $($script:URL_PVWAAPI)"
 }
 
@@ -489,14 +529,19 @@ function Import-ScriptConfig {
         UserDefaults              = @{ accountPlatform = $script:DEFAULT_PLATFORM_ID }
         DefaultSafeMembers        = @()
         RoleConfigSets            = @{}
+        SafeEndUserRole           = 'EndUser'
+        SafeEndUserRoleConfigSet  = $null
+        SafeEndUserSearchIn       = ''
+        SafeEndUserMemberType     = ''
+        SafeOptions               = @{ useExisting = $true }
+        UserOptions               = @{ accountUserPattern = $null; allowDuplicateAccounts = $false; createSafeOnly = $false }
     }
 
     # Locate config file
     $effectiveConfigPath = $null
     if (-not [string]::IsNullOrEmpty($ConfigPath) -and (Test-Path -Path $ConfigPath -PathType Leaf)) {
         $effectiveConfigPath = $ConfigPath
-    }
-    else {
+    } else {
         $autoConfig = Join-Path -Path $ScriptLocation -ChildPath 'PersonalPrivilegedAccounts.json'
         if (Test-Path -Path $autoConfig -PathType Leaf) {
             $effectiveConfigPath = $autoConfig
@@ -512,7 +557,7 @@ function Import-ScriptConfig {
             # Load all RoleConfigSet entries (flat dictionary - no named-set layering)
             if ($null -ne $jsonContent.RoleConfigSet) {
                 $jsonContent.RoleConfigSet.PSObject.Properties | ForEach-Object {
-                    $roleName  = $PSItem.Name
+                    $roleName = $PSItem.Name
                     $rolePerms = @{}
                     $PSItem.Value.PSObject.Properties | ForEach-Object { $rolePerms[$PSItem.Name] = $PSItem.Value }
                     $resolved.RoleConfigSets[$roleName] = $rolePerms
@@ -522,24 +567,64 @@ function Import-ScriptConfig {
 
             function Merge-SafeSet {
                 param([Parameter(Mandatory = $true)] $Set)
-                if (-not [string]::IsNullOrEmpty($Set.CPMName)) { $resolved.CPMName = $Set.CPMName }
-                if ($null -ne $Set.NumberOfVersionsRetention) {
-                    $resolved.NumberOfVersionsRetention = $Set.NumberOfVersionsRetention
-                    $resolved.NumberOfDaysRetention     = $null
+                $props = $Set.Properties
+                $opts = $Set.Options
+                if ($null -ne $props) {
+                    if (-not [string]::IsNullOrEmpty($props.CPMName)) {
+                        $resolved.CPMName = $props.CPMName
+                    }
+                    if ($null -ne $props.NumberOfVersionsRetention) {
+                        $resolved.NumberOfVersionsRetention = $props.NumberOfVersionsRetention
+                        $resolved.NumberOfDaysRetention = $null
+                    }
+                    if ($null -ne $props.NumberOfDaysRetention) {
+                        $resolved.NumberOfDaysRetention = $props.NumberOfDaysRetention
+                        $resolved.NumberOfVersionsRetention = $null
+                    }
+                    if (-not [string]::IsNullOrEmpty($props.SafeNamePattern)) {
+                        $resolved.SafeNamePattern = $props.SafeNamePattern
+                    }
+                    if ($null -ne $props.DefaultSafeMembers) {
+                        $resolved.DefaultSafeMembers = $props.DefaultSafeMembers
+                    }
+                    if (-not [string]::IsNullOrEmpty($props.SafeEndUserRoleConfigSet)) {
+                        $resolved.SafeEndUserRoleConfigSet = $props.SafeEndUserRoleConfigSet
+                        $resolved.SafeEndUserRole = $null
+                    } elseif (-not [string]::IsNullOrEmpty($props.SafeEndUserRole)) {
+                        $resolved.SafeEndUserRole = $props.SafeEndUserRole
+                        $resolved.SafeEndUserRoleConfigSet = $null
+                    }
+                    if (-not [string]::IsNullOrEmpty($props.SafeEndUserSearchIn)) {
+                        $resolved.SafeEndUserSearchIn = $props.SafeEndUserSearchIn
+                    }
+                    if (-not [string]::IsNullOrEmpty($props.SafeEndUserMemberType)) {
+                        $resolved.SafeEndUserMemberType = $props.SafeEndUserMemberType
+                    }
                 }
-                if ($null -ne $Set.NumberOfDaysRetention) {
-                    $resolved.NumberOfDaysRetention     = $Set.NumberOfDaysRetention
-                    $resolved.NumberOfVersionsRetention = $null
+                if ($null -ne $opts -and $null -ne $opts.useExisting) {
+                    $resolved.SafeOptions['useExisting'] = [bool]$opts.useExisting
                 }
-                if (-not [string]::IsNullOrEmpty($Set.SafeNamePattern)) { $resolved.SafeNamePattern   = $Set.SafeNamePattern }
-                if ($null -ne $Set.DefaultSafeMembers)                   { $resolved.DefaultSafeMembers = $Set.DefaultSafeMembers }
             }
 
-            # Keys match CSV column names exactly; any key is accepted as a default
+            # Properties keys match CSV column names (account field defaults).
+            # Options keys are behavioral settings (accountUserPattern, allowDuplicateAccounts).
             function Merge-UserSet {
                 param([Parameter(Mandatory = $true)] $Set)
-                $Set.PSObject.Properties | ForEach-Object {
-                    $resolved.UserDefaults[$PSItem.Name] = $PSItem.Value
+                if ($null -ne $Set.Properties) {
+                    $Set.Properties.PSObject.Properties | ForEach-Object {
+                        $resolved.UserDefaults[$PSItem.Name] = $PSItem.Value
+                    }
+                }
+                if ($null -ne $Set.Options) {
+                    if (-not [string]::IsNullOrEmpty($Set.Options.accountUserPattern)) {
+                        $resolved.UserOptions['accountUserPattern'] = $Set.Options.accountUserPattern
+                    }
+                    if ($null -ne $Set.Options.allowDuplicateAccounts) {
+                        $resolved.UserOptions['allowDuplicateAccounts'] = [bool]$Set.Options.allowDuplicateAccounts
+                    }
+                    if ($null -ne $Set.Options.createSafeOnly) {
+                        $resolved.UserOptions['createSafeOnly'] = [bool]$Set.Options.createSafeOnly
+                    }
                 }
             }
 
@@ -561,8 +646,7 @@ function Import-ScriptConfig {
                 if ($null -ne $safeSet) {
                     Write-LogMessage -type Info -MSG "Applying SafeConfigSet: $SafeConfigSet"
                     Merge-SafeSet -Set $safeSet.Value
-                }
-                else {
+                } else {
                     Write-LogMessage -type Warning -MSG "SafeConfigSet '$SafeConfigSet' not found in config. Using 'default'."
                 }
             }
@@ -573,17 +657,14 @@ function Import-ScriptConfig {
                 if ($null -ne $userSet) {
                     Write-LogMessage -type Info -MSG "Applying UserConfigSet: $UserConfigSet"
                     Merge-UserSet -Set $userSet.Value
-                }
-                else {
+                } else {
                     Write-LogMessage -type Warning -MSG "UserConfigSet '$UserConfigSet' not found in config. Using 'default'."
                 }
             }
-        }
-        catch {
+        } catch {
             Write-LogMessage -type Warning -MSG "Failed to load config '$effectiveConfigPath': $($PSItem.Exception.Message). Using baseline defaults."
         }
-    }
-    else {
+    } else {
         Write-LogMessage -type Info -MSG 'No config file found. Using baseline defaults.'
     }
 
@@ -599,10 +680,10 @@ function Import-ScriptConfig {
     }
     if ($PSBoundParameters.ContainsKey('NumberOfVersionsRetention')) {
         $resolved.NumberOfVersionsRetention = $NumberOfVersionsRetention
-        $resolved.NumberOfDaysRetention     = $null
+        $resolved.NumberOfDaysRetention = $null
     }
     if ($PSBoundParameters.ContainsKey('NumberOfDaysRetention')) {
-        $resolved.NumberOfDaysRetention     = $NumberOfDaysRetention
+        $resolved.NumberOfDaysRetention = $NumberOfDaysRetention
         $resolved.NumberOfVersionsRetention = $null
     }
 
@@ -618,7 +699,7 @@ function Import-ScriptConfig {
     }
 
     $script:Config = $resolved
-    Write-LogMessage -type Debug -MSG "Resolved config: CPM=$($script:Config.CPMName), VersionsRetention=$($script:Config.NumberOfVersionsRetention), DaysRetention=$($script:Config.NumberOfDaysRetention), SafePattern=$($script:Config.SafeNamePattern), UserDefaults=$($script:Config.UserDefaults.Keys -join ','), DefaultMembers=$($script:Config.DefaultSafeMembers.Count), CustomRoles=$($script:Config.RoleConfigSets.Count)"
+    Write-LogMessage -type Debug -MSG "Resolved config: CPM=$($script:Config.CPMName), VersionsRetention=$($script:Config.NumberOfVersionsRetention), DaysRetention=$($script:Config.NumberOfDaysRetention), SafePattern=$($script:Config.SafeNamePattern), UserDefaults=$($script:Config.UserDefaults.Keys -join ','), DefaultMembers=$($script:Config.DefaultSafeMembers.Count), CustomRoles=$($script:Config.RoleConfigSets.Count), SafeOptions=[$($script:Config.SafeOptions.GetEnumerator() | ForEach-Object {"$($PSItem.Key)=$($PSItem.Value)"} | Join-String -Separator ',')], UserOptions=[$($script:Config.UserOptions.GetEnumerator() | ForEach-Object {"$($PSItem.Key)=$($PSItem.Value)"} | Join-String -Separator ',')]"
 }
 
 function Get-RowConfig {
@@ -656,37 +737,65 @@ function Get-RowConfig {
         UserDefaults              = $script:Config.UserDefaults.Clone()
         DefaultSafeMembers        = $script:Config.DefaultSafeMembers   # replaced wholesale; never mutated
         RoleConfigSets            = $script:Config.RoleConfigSets        # read-only reference
+        SafeEndUserRole           = $script:Config.SafeEndUserRole
+        SafeEndUserRoleConfigSet  = $script:Config.SafeEndUserRoleConfigSet
+        SafeEndUserSearchIn       = $script:Config.SafeEndUserSearchIn
+        SafeEndUserMemberType     = $script:Config.SafeEndUserMemberType
+        SafeOptions               = $script:Config.SafeOptions.Clone()
+        UserOptions               = $script:Config.UserOptions.Clone()
     }
 
     # Apply SafeConfigSet override
     if (-not [string]::IsNullOrEmpty($RowSafeConfigSet)) {
         if ($null -eq $script:g_JsonContent) {
             Write-LogMessage -type Warning -MSG "Get-RowConfig: SafeConfigSet '$RowSafeConfigSet' requested but no config file was loaded — using base config"
-        }
-        else {
+        } else {
             $safeSet = $script:g_JsonContent.SafeConfigSet.PSObject.Properties[$RowSafeConfigSet]
             if ($null -eq $safeSet) {
                 if ($FallbackOnInvalidConfigSet) {
                     Write-LogMessage -type Warning -MSG "Get-RowConfig: SafeConfigSet '$RowSafeConfigSet' not found in config — falling back to base config"
-                }
-                else {
+                } else {
                     Write-LogMessage -type Error -MSG "Get-RowConfig: SafeConfigSet '$RowSafeConfigSet' not found in config — row will be skipped. Use -FallbackOnInvalidConfigSet to fall back instead."
                     return $null
                 }
-            }
-            else {
-                $set = $safeSet.Value
-                if (-not [string]::IsNullOrEmpty($set.CPMName))             { $resolved.CPMName = $set.CPMName }
-                if ($null -ne $set.NumberOfVersionsRetention) {
-                    $resolved.NumberOfVersionsRetention = $set.NumberOfVersionsRetention
-                    $resolved.NumberOfDaysRetention     = $null
+            } else {
+                $setProps = $safeSet.Value.Properties
+                $setOpts = $safeSet.Value.Options
+                if ($null -ne $setProps) {
+                    if (-not [string]::IsNullOrEmpty($setProps.CPMName)) {
+                        $resolved.CPMName = $setProps.CPMName
+                    }
+                    if ($null -ne $setProps.NumberOfVersionsRetention) {
+                        $resolved.NumberOfVersionsRetention = $setProps.NumberOfVersionsRetention
+                        $resolved.NumberOfDaysRetention = $null
+                    }
+                    if ($null -ne $setProps.NumberOfDaysRetention) {
+                        $resolved.NumberOfDaysRetention = $setProps.NumberOfDaysRetention
+                        $resolved.NumberOfVersionsRetention = $null
+                    }
+                    if (-not [string]::IsNullOrEmpty($setProps.SafeNamePattern)) {
+                        $resolved.SafeNamePattern = $setProps.SafeNamePattern
+                    }
+                    if ($null -ne $setProps.DefaultSafeMembers) {
+                        $resolved.DefaultSafeMembers = $setProps.DefaultSafeMembers
+                    }
+                    if (-not [string]::IsNullOrEmpty($setProps.SafeEndUserRoleConfigSet)) {
+                        $resolved.SafeEndUserRoleConfigSet = $setProps.SafeEndUserRoleConfigSet
+                        $resolved.SafeEndUserRole = $null
+                    } elseif (-not [string]::IsNullOrEmpty($setProps.SafeEndUserRole)) {
+                        $resolved.SafeEndUserRole = $setProps.SafeEndUserRole
+                        $resolved.SafeEndUserRoleConfigSet = $null
+                    }
+                    if (-not [string]::IsNullOrEmpty($setProps.SafeEndUserSearchIn)) {
+                        $resolved.SafeEndUserSearchIn = $setProps.SafeEndUserSearchIn
+                    }
+                    if (-not [string]::IsNullOrEmpty($setProps.SafeEndUserMemberType)) {
+                        $resolved.SafeEndUserMemberType = $setProps.SafeEndUserMemberType
+                    }
                 }
-                if ($null -ne $set.NumberOfDaysRetention) {
-                    $resolved.NumberOfDaysRetention     = $set.NumberOfDaysRetention
-                    $resolved.NumberOfVersionsRetention = $null
+                if ($null -ne $setOpts -and $null -ne $setOpts.useExisting) {
+                    $resolved.SafeOptions['useExisting'] = [bool]$setOpts.useExisting
                 }
-                if (-not [string]::IsNullOrEmpty($set.SafeNamePattern))     { $resolved.SafeNamePattern    = $set.SafeNamePattern }
-                if ($null -ne $set.DefaultSafeMembers)                       { $resolved.DefaultSafeMembers = $set.DefaultSafeMembers }
                 Write-LogMessage -type Verbose -MSG "Get-RowConfig: Applied SafeConfigSet '$RowSafeConfigSet'"
             }
         }
@@ -696,21 +805,28 @@ function Get-RowConfig {
     if (-not [string]::IsNullOrEmpty($RowUserConfigSet)) {
         if ($null -eq $script:g_JsonContent) {
             Write-LogMessage -type Warning -MSG "Get-RowConfig: UserConfigSet '$RowUserConfigSet' requested but no config file was loaded — using base config"
-        }
-        else {
+        } else {
             $userSet = $script:g_JsonContent.UserConfigSet.PSObject.Properties[$RowUserConfigSet]
             if ($null -eq $userSet) {
                 if ($FallbackOnInvalidConfigSet) {
                     Write-LogMessage -type Warning -MSG "Get-RowConfig: UserConfigSet '$RowUserConfigSet' not found in config — falling back to base config"
-                }
-                else {
+                } else {
                     Write-LogMessage -type Error -MSG "Get-RowConfig: UserConfigSet '$RowUserConfigSet' not found in config — row will be skipped. Use -FallbackOnInvalidConfigSet to fall back instead."
                     return $null
                 }
-            }
-            else {
-                $userSet.Value.PSObject.Properties | ForEach-Object {
-                    $resolved.UserDefaults[$PSItem.Name] = $PSItem.Value
+            } else {
+                if ($null -ne $userSet.Value.Properties) {
+                    $userSet.Value.Properties.PSObject.Properties | ForEach-Object {
+                        $resolved.UserDefaults[$PSItem.Name] = $PSItem.Value
+                    }
+                }
+                if ($null -ne $userSet.Value.Options) {
+                    if (-not [string]::IsNullOrEmpty($userSet.Value.Options.accountUserPattern)) {
+                        $resolved.UserOptions['accountUserPattern'] = $userSet.Value.Options.accountUserPattern
+                    }
+                    if ($null -ne $userSet.Value.Options.allowDuplicateAccounts) {
+                        $resolved.UserOptions['allowDuplicateAccounts'] = [bool]$userSet.Value.Options.allowDuplicateAccounts
+                    }
                 }
                 Write-LogMessage -type Verbose -MSG "Get-RowConfig: Applied UserConfigSet '$RowUserConfigSet'"
             }
@@ -720,7 +836,7 @@ function Get-RowConfig {
     return $resolved
 }
 
-Function ConvertTo-URL {
+function ConvertTo-URL {
     <#
 .SYNOPSIS
     RFC 3986-encodes a string for safe use in a URL path segment.
@@ -736,11 +852,12 @@ Function ConvertTo-URL {
     if (-not [string]::IsNullOrEmpty($sText)) {
         Write-LogMessage -type Verbose -MSG "ConvertTo-URL:`tEncoding: $sText"
         return [URI]::EscapeDataString($sText)
+    } else {
+        return $sText
     }
-    else { return $sText }
 }
 
-Function ConvertTo-Bool {
+function ConvertTo-Bool {
     <#
 .SYNOPSIS
     Converts a CSV string value to a Boolean.
@@ -758,13 +875,17 @@ Function ConvertTo-Bool {
         [string]$txt
     )
     $retBool = $false
-    if ($txt -match '^y$|^yes$')      { $retBool = $true }
-    elseif ($txt -match '^n$|^no$')   { $retBool = $false }
-    else { [bool]::TryParse($txt, [ref]$retBool) | Out-Null }
+    if ($txt -match '^y$|^yes$') {
+        $retBool = $true
+    } elseif ($txt -match '^n$|^no$') {
+        $retBool = $false
+    } else {
+        [bool]::TryParse($txt, [ref]$retBool) | Out-Null
+    }
     return $retBool
 }
 
-Function Get-TrimmedString {
+function Get-TrimmedString {
     <#
 .SYNOPSIS
     Returns a trimmed string; passes $null through unchanged.
@@ -777,11 +898,13 @@ Function Get-TrimmedString {
         [Parameter(Mandatory = $false)]
         [string]$sText
     )
-    if ($null -ne $sText) { return $sText.Trim() }
+    if ($null -ne $sText) {
+        return $sText.Trim()
+    }
     return $sText
 }
 
-Function Get-PersonalSafeNameFromPattern {
+function Get-PersonalSafeNameFromPattern {
     <#
 .SYNOPSIS
     Returns the personal safe name by substituting a user name into the active safe name pattern.
@@ -801,13 +924,13 @@ Function Get-PersonalSafeNameFromPattern {
     return $SafeNamePattern.Replace('*', $userName)
 }
 
-Function Disable-SSLVerification {
+function Disable-SSLVerification {
     <#
 .SYNOPSIS
     Bypasses SSL certificate validation. Use only in test environments.
 #>
     [System.Net.WebRequest]::DefaultWebProxy.Credentials = [System.Net.CredentialCache]::DefaultCredentials
-    [System.Net.ServicePointManager]::SecurityProtocol   = [System.Net.SecurityProtocolType]::Tls12
+    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
     if (-not ('DisableCertValidationCallback' -as [type])) {
         Add-Type -TypeDefinition @'
 using System;
@@ -838,6 +961,7 @@ function Invoke-Rest {
       - SFWS0002 (safe already exists): throws message string
       - SFWS0007 (safe deleted/not found): re-throws exception
       - SFWS0012 (already a member): logs verbose, re-throws
+      - SFWS0013 (you cannot update your own account): logs warning, returns null (safe creator has full access implicitly)
       - All others: logs and re-throws
 .PARAMETER Command
     HTTP method: GET, POST, DELETE, PATCH, PUT
@@ -891,8 +1015,7 @@ function Invoke-Rest {
                 Debug       = $InDebug
             }
             $restResponse = Invoke-RestMethod @restParams
-        }
-        else {
+        } else {
             Write-LogMessage -type Verbose -MSG "Invoke-Rest:`t$Command $URI"
             $restParams = @{
                 Uri         = $URI
@@ -908,25 +1031,21 @@ function Invoke-Rest {
             $restResponse = Invoke-RestMethod @restParams
         }
         Write-LogMessage -type Verbose -MSG 'Invoke-Rest:`tCompleted without error'
-    }
-    catch {
+    } catch {
         if ($PSItem.ErrorDetails.Message -notmatch '.*ErrorCode[\s\S]*ErrorMessage.*') {
             if ($PSItem.Exception.response.StatusCode.value__ -eq 401) {
                 Write-LogMessage -type Error -MSG 'Received error 401 - Unauthorized access'
                 Write-LogMessage -type Error -MSG '**** Exiting script ****' -Footer -Header
                 exit 5
-            }
-            elseif ($PSItem.Exception.response.StatusCode.value__ -eq 403) {
+            } elseif ($PSItem.Exception.response.StatusCode.value__ -eq 403) {
                 Write-LogMessage -type Error -MSG 'Received error 403 - Forbidden access'
                 Write-LogMessage -type Error -MSG '**** Exiting script ****' -Footer -Header
                 exit 5
-            }
-            elseif ($PSItem.Exception -match 'The remote name could not be resolved:') {
+            } elseif ($PSItem.Exception -match 'The remote name could not be resolved:') {
                 Write-LogMessage -type Error -MSG 'Received error - The remote name could not be resolved'
                 Write-LogMessage -type Error -MSG '**** Exiting script ****' -Footer -Header
                 exit 1
-            }
-            else {
+            } else {
                 throw $(New-Object System.Exception ("Invoke-Rest: Error in running $Command on '$URI'", $PSItem.Exception))
             }
         }
@@ -935,28 +1054,44 @@ function Invoke-Rest {
             Write-LogMessage -type Error -MSG "$($Details.ErrorMessage)"
             Write-LogMessage -type Error -MSG '**** Exiting script ****' -Footer -Header
             exit 5
-        }
-        elseif ('SFWS0007' -eq $Details.ErrorCode) {
+        } elseif ('SFWS0007' -eq $Details.ErrorCode) {
+            # Safe not found — return $null when caller requested silent handling, otherwise throw
+            if ($ErrAction -in @('SilentlyContinue', 'Ignore')) {
+                return $null
+            }
             throw $PSItem.Exception
-        }
-        elseif ('SFWS0002' -eq $Details.ErrorCode) {
+        } elseif ('SFWS0002' -eq $Details.ErrorCode) {
             Write-LogMessage -type Warning -MSG "$($Details.ErrorMessage)"
             throw "$($Details.ErrorMessage)"
-        }
-        elseif ('SFWS0012' -eq $Details.ErrorCode) {
+        } elseif ('SFWS0012' -eq $Details.ErrorCode) {
             Write-LogMessage -type Verbose -MSG "Invoke-Rest:`t$($Details.ErrorMessage)"
             throw $PSItem
-        }
-        else {
+        } elseif ('SFWS0013' -eq $Details.ErrorCode) {
+            # "You cannot update your own account" -- safe creator already has full access;
+            # downgrade to warning so Add-SafeOwner callers can continue to Add-DefaultSafeMembers.
+            Write-LogMessage -type Warning -MSG "Invoke-Rest:`t$($Details.ErrorMessage) (SFWS0013 -- safe creator skipped)"
+            return $null
+        } else {
             Write-LogMessage -type Verbose -MSG "Invoke-Rest:`tError running $Command on '$URI'"
             Write-LogMessage -type Verbose -MSG "Invoke-Rest:`tMessage: $PSItem"
             Write-LogMessage -type Verbose -MSG "Invoke-Rest:`tException: $($PSItem.Exception.Message)"
+            $silentErrAction = $ErrAction -in @('SilentlyContinue', 'Ignore')
             if ($PSItem.Exception.Response) {
-                Write-LogMessage -type Error -MSG "Status Code: $($PSItem.Exception.Response.StatusCode.value__)"
-                Write-LogMessage -type Error -MSG "Status Description: $($PSItem.Exception.Response.StatusDescription)"
+                $statusLogType = if ($silentErrAction) {
+                    'Verbose' 
+                } else {
+                    'Error' 
+                }
+                Write-LogMessage -type $statusLogType -MSG "Status Code: $($PSItem.Exception.Response.StatusCode.value__)"
+                Write-LogMessage -type $statusLogType -MSG "Status Description: $($PSItem.Exception.Response.StatusDescription)"
             }
             if ($($PSItem.ErrorDetails.Message | ConvertFrom-Json).ErrorMessage) {
-                Write-LogMessage -type Error -MSG "Error Message: $($($PSItem.ErrorDetails.Message | ConvertFrom-Json).ErrorMessage)"
+                $msgLogType = if ($silentErrAction) {
+                    'Verbose' 
+                } else {
+                    'Error' 
+                }
+                Write-LogMessage -type $msgLogType -MSG "Error Message: $($($PSItem.ErrorDetails.Message | ConvertFrom-Json).ErrorMessage)"
             }
             $restResponse = $null
             throw $(New-Object System.Exception ("Invoke-Rest: Error in running $Command on '$URI'", $PSItem.Exception))
@@ -966,7 +1101,7 @@ function Invoke-Rest {
     return $restResponse
 }
 
-Function Invoke-Logon {
+function Invoke-Logon {
     <#
 .SYNOPSIS
     Authenticates to PVWA and returns an Authorization header hashtable.
@@ -983,7 +1118,7 @@ Function Invoke-Logon {
     )
     $BSTR = $null
     try {
-        $BSTR          = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($Credentials.Password)
+        $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($Credentials.Password)
         $plainPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
 
         $logonBody = @{
@@ -993,35 +1128,34 @@ Function Invoke-Logon {
         } | ConvertTo-Json -Compress
 
         if (-not [string]::IsNullOrEmpty($RadiusOTP)) {
-            $logonBodyObj          = $logonBody | ConvertFrom-Json
+            $logonBodyObj = $logonBody | ConvertFrom-Json
             $logonBodyObj.password = "$plainPassword,$RadiusOTP"
-            $logonBody             = $logonBodyObj | ConvertTo-Json -Compress
+            $logonBody = $logonBodyObj | ConvertTo-Json -Compress
         }
 
         $logonToken = Invoke-Rest -Command POST -URI $script:URL_Logon -Body $logonBody
-        $logonBody  = ''
-    }
-    catch {
-        Throw $(New-Object System.Exception ("Invoke-Logon: $($PSItem.Exception.Response.StatusDescription)", $PSItem.Exception))
-    }
-    finally {
-        if ($null -ne $BSTR) { [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR) }
+        $logonBody = ''
+    } catch {
+        throw $(New-Object System.Exception ("Invoke-Logon: $($PSItem.Exception.Response.StatusDescription)", $PSItem.Exception))
+    } finally {
+        if ($null -ne $BSTR) {
+            [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)
+        }
         $plainPassword = $null
     }
 
     if ([string]::IsNullOrEmpty($logonToken)) {
-        Throw 'Invoke-Logon: Logon Token is Empty - Cannot login'
+        throw 'Invoke-Logon: Logon Token is Empty - Cannot login'
     }
 
     if ($logonToken.PSObject.Properties.Name -contains 'CyberArkLogonResult') {
         return @{Authorization = $($logonToken.CyberArkLogonResult) }
-    }
-    else {
+    } else {
         return @{Authorization = $logonToken }
     }
 }
 
-Function Invoke-Logoff {
+function Invoke-Logoff {
     <#
 .SYNOPSIS
     Logs off a PVWA session.
@@ -1036,18 +1170,17 @@ Function Invoke-Logoff {
         $Header = $script:g_LogonHeader
     )
     try {
-        If ($null -ne $Header) {
+        if ($null -ne $Header) {
             Write-LogMessage -type Info -MSG 'Logoff Session...'
             Invoke-Rest -Command POST -URI $script:URL_Logoff -Header $Header | Out-Null
             $script:g_LogonHeader = $null
         }
-    }
-    catch {
-        Throw $(New-Object System.Exception ('Invoke-Logoff: Failed to logoff session', $PSItem.Exception))
+    } catch {
+        throw $(New-Object System.Exception ('Invoke-Logoff: Failed to logoff session', $PSItem.Exception))
     }
 }
 
-Function Get-LogonHeader {
+function Get-LogonHeader {
     <#
 .SYNOPSIS
     Returns a valid logon header. For RADIUS auth, reuses an existing session.
@@ -1063,22 +1196,20 @@ Function Get-LogonHeader {
         [string]$RadiusOTP
     )
     try {
-        If ([string]::IsNullOrEmpty($RadiusOTP)) {
+        if ([string]::IsNullOrEmpty($RadiusOTP)) {
             return $(Invoke-Logon -Credentials $Credentials)
-        }
-        else {
+        } else {
             if ([string]::IsNullOrEmpty($script:g_LogonHeader)) {
                 $script:g_LogonHeader = $(Invoke-Logon -Credentials $Credentials -RadiusOTP $RadiusOTP)
             }
             return $script:g_LogonHeader
         }
-    }
-    catch {
-        Throw $(New-Object System.Exception ('Get-LogonHeader: Error returning the logon header.', $PSItem.Exception))
+    } catch {
+        throw $(New-Object System.Exception ('Get-LogonHeader: Error returning the logon header.', $PSItem.Exception))
     }
 }
 
-Function Open-FileDialog {
+function Open-FileDialog {
     <#
 .SYNOPSIS
     Opens a Windows file picker dialog to select a CSV file.
@@ -1093,10 +1224,10 @@ Function Open-FileDialog {
         [string]$LocationPath
     )
     [System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms') | Out-Null
-    $OpenFileDialog                  = New-Object System.Windows.Forms.OpenFileDialog
+    $OpenFileDialog = New-Object System.Windows.Forms.OpenFileDialog
     $OpenFileDialog.initialDirectory = $LocationPath
-    $OpenFileDialog.filter           = 'CSV (*.csv)| *.csv'
-    $OpenFileDialog.ShowDialog()     | Out-Null
+    $OpenFileDialog.filter = 'CSV (*.csv)| *.csv'
+    $OpenFileDialog.ShowDialog() | Out-Null
     return $OpenFileDialog.filename
 }
 function Get-AuthHeader {
@@ -1108,7 +1239,7 @@ function Get-AuthHeader {
 #endregion Helper Functions
 
 #region Accounts and Safes Functions
-Function Get-Safe {
+function Get-Safe {
     <#
 .SYNOPSIS
     Returns an existing safe object via the v2 REST API (/api/Safes).
@@ -1138,15 +1269,14 @@ Function Get-Safe {
     $_safe = $null
     try {
         $accSafeURL = $script:URL_SafeDetails -f $(ConvertTo-URL $safeName)
-        $_safe      = $(Invoke-Rest -URI $accSafeURL -Header $Header -Command 'GET' -ErrAction $ErrAction)
-    }
-    catch {
-        Throw $(New-Object System.Exception ("Get-Safe: Error getting safe '$safeName' details.", $PSItem.Exception))
+        $_safe = $(Invoke-Rest -URI $accSafeURL -Header $Header -Command 'GET' -ErrAction $ErrAction)
+    } catch {
+        throw $(New-Object System.Exception ("Get-Safe: Error getting safe '$safeName' details.", $PSItem.Exception))
     }
     return $_safe
 }
 
-Function Test-Safe {
+function Test-Safe {
     <#
 .SYNOPSIS
     Returns $true if the named safe exists, $false otherwise.
@@ -1166,21 +1296,19 @@ Function Test-Safe {
         [String]$safeName
     )
     try {
-        If ($null -eq $(Get-Safe -safeName $safeName -Header $Header -ErrAction 'SilentlyContinue')) {
-            Write-LogMessage -type Warning -MSG "Safe '$safeName' does not exist"
+        if ($null -eq $(Get-Safe -SafeName $safeName -Header $Header -ErrAction 'SilentlyContinue')) {
+            Write-LogMessage -type Info -MSG "Safe '$safeName' does not exist"
             return $false
-        }
-        else {
+        } else {
             Write-LogMessage -type Verbose -MSG "Safe '$safeName' exists"
             return $true
         }
-    }
-    catch {
-        Throw $(New-Object System.Exception ("Test-Safe: Error testing safe '$safeName' existence.", $PSItem.Exception))
+    } catch {
+        throw $(New-Object System.Exception ("Test-Safe: Error testing safe '$safeName' existence.", $PSItem.Exception))
     }
 }
 
-Function Add-Safe {
+function Add-Safe {
     <#
 .SYNOPSIS
     Creates a new safe using the v2 REST API (/api/Safes).
@@ -1216,9 +1344,8 @@ Function Add-Safe {
     }
 
     if ($null -ne $script:Config.NumberOfDaysRetention) {
-        $bodySafe.numberOfDaysRetention    = $script:Config.NumberOfDaysRetention
-    }
-    else {
+        $bodySafe.numberOfDaysRetention = $script:Config.NumberOfDaysRetention
+    } else {
         $bodySafe.numberOfVersionsRetention = $script:Config.NumberOfVersionsRetention
     }
 
@@ -1229,18 +1356,16 @@ Function Add-Safe {
         if ($createSafeResult) {
             Write-LogMessage -type Debug -MSG "Safe '$safeName' created"
             return $true
-        }
-        else {
+        } else {
             Write-LogMessage -type Error -MSG 'Safe creation failed - skipping account creation'
             return $false
         }
-    }
-    catch {
-        Throw $(New-Object System.Exception ("Add-Safe: Failed to create safe '$safeName'", $PSItem.Exception))
+    } catch {
+        throw $(New-Object System.Exception ("Add-Safe: Failed to create safe '$safeName'", $PSItem.Exception))
     }
 }
 
-Function Add-SafeOwner {
+function Add-SafeOwner {
     <#
 .SYNOPSIS
     Adds a member to a safe using a named role or custom permissions (v2 REST API flat permissions object).
@@ -1278,182 +1403,132 @@ Function Add-SafeOwner {
         [ValidateNotNullOrEmpty()]
         [string]$ownerName,
         [Parameter(Mandatory = $false)]
-        [ValidateSet('ConnectOnly', 'ReadOnly', 'Approver', 'AccountsManager', 'Full')]
+        [ValidateSet('ConnectOnly', 'ReadOnly', 'EndUser', 'Approver', 'AccountsManager', 'Full')]
         [string]$ownerRole,
         [Parameter(Mandatory = $false)]
         [hashtable]$CustomPermissions,
         [Parameter(Mandatory = $false)]
-        [string]$memberSearchInLocation = 'Vault'
+        [string]$memberSearchInLocation = 'Vault',
+        [Parameter(Mandatory = $false)]
+        [ValidateSet('', 'User', 'Group', 'Role')]
+        [string]$memberType = ''
     )
 
     if ($null -eq $CustomPermissions -and [string]::IsNullOrEmpty($ownerRole)) {
-        Throw "Add-SafeOwner: Either -ownerRole or -CustomPermissions must be supplied for '$ownerName' on '$safeName'."
+        throw "Add-SafeOwner: Either -ownerRole or -CustomPermissions must be supplied for '$ownerName' on '$safeName'."
     }
 
     Write-LogMessage -type Verbose -MSG "Adding member '$ownerName' to safe '$safeName' (role: $(if ($CustomPermissions) { 'Custom' } else { $ownerRole }))..."
 
     if ($null -ne $CustomPermissions) {
         $permissions = $CustomPermissions
-    }
-    else {
-    switch ($ownerRole) {
-        'ConnectOnly' {
-            $permissions = @{
-                useAccounts                            = $true
-                retrieveAccounts                       = $false
-                listAccounts                           = $true
-                addAccounts                            = $false
-                updateAccountContent                   = $false
-                updateAccountProperties                = $false
-                initiateCPMAccountManagementOperations = $false
-                specifyNextAccountContent              = $false
-                renameAccounts                         = $false
-                deleteAccounts                         = $false
-                unlockAccounts                         = $false
-                manageSafe                             = $false
-                manageSafeMembers                      = $false
-                backupSafe                             = $false
-                viewAuditLog                           = $false
-                viewSafeMembers                        = $false
-                accessWithoutConfirmation              = $false
-                createFolders                          = $false
-                deleteFolders                          = $false
-                moveAccountsAndFolders                 = $false
-                requestsAuthorizationLevel1            = $false
-                requestsAuthorizationLevel2            = $false
+    } else {
+        switch ($ownerRole) {
+            'ConnectOnly' {
+                $permissions = @{
+                    useAccounts  = $true
+                    listAccounts = $true
+                }
             }
-        }
-        'ReadOnly' {
-            $permissions = @{
-                useAccounts                            = $true
-                retrieveAccounts                       = $true
-                listAccounts                           = $true
-                addAccounts                            = $false
-                updateAccountContent                   = $false
-                updateAccountProperties                = $false
-                initiateCPMAccountManagementOperations = $false
-                specifyNextAccountContent              = $false
-                renameAccounts                         = $false
-                deleteAccounts                         = $false
-                unlockAccounts                         = $false
-                manageSafe                             = $false
-                manageSafeMembers                      = $false
-                backupSafe                             = $false
-                viewAuditLog                           = $false
-                viewSafeMembers                        = $false
-                accessWithoutConfirmation              = $false
-                createFolders                          = $false
-                deleteFolders                          = $false
-                moveAccountsAndFolders                 = $false
-                requestsAuthorizationLevel1            = $false
-                requestsAuthorizationLevel2            = $false
+            'ReadOnly' {
+                $permissions = @{
+                    useAccounts      = $true
+                    retrieveAccounts = $true
+                    listAccounts     = $true
+                }
             }
-        }
-        'Approver' {
-            $permissions = @{
-                useAccounts                            = $false
-                retrieveAccounts                       = $false
-                listAccounts                           = $true
-                addAccounts                            = $false
-                updateAccountContent                   = $false
-                updateAccountProperties                = $false
-                initiateCPMAccountManagementOperations = $false
-                specifyNextAccountContent              = $false
-                renameAccounts                         = $false
-                deleteAccounts                         = $false
-                unlockAccounts                         = $false
-                manageSafe                             = $false
-                manageSafeMembers                      = $true
-                backupSafe                             = $false
-                viewAuditLog                           = $false
-                viewSafeMembers                        = $true
-                accessWithoutConfirmation              = $false
-                createFolders                          = $false
-                deleteFolders                          = $false
-                moveAccountsAndFolders                 = $false
-                requestsAuthorizationLevel1            = $true
-                requestsAuthorizationLevel2            = $false
+            'EndUser' {
+                $permissions = @{
+                    useAccounts      = $true
+                    retrieveAccounts = $true
+                    listAccounts     = $true
+                    viewAuditLog     = $true
+                    viewSafeMembers  = $true
+                }
             }
-        }
-        'AccountsManager' {
-            $permissions = @{
-                useAccounts                            = $true
-                retrieveAccounts                       = $true
-                listAccounts                           = $true
-                addAccounts                            = $true
-                updateAccountContent                   = $true
-                updateAccountProperties                = $true
-                initiateCPMAccountManagementOperations = $true
-                specifyNextAccountContent              = $true
-                renameAccounts                         = $true
-                deleteAccounts                         = $true
-                unlockAccounts                         = $true
-                manageSafe                             = $false
-                manageSafeMembers                      = $true
-                backupSafe                             = $false
-                viewAuditLog                           = $true
-                viewSafeMembers                        = $true
-                accessWithoutConfirmation              = $true
-                createFolders                          = $false
-                deleteFolders                          = $false
-                moveAccountsAndFolders                 = $false
-                requestsAuthorizationLevel1            = $true
-                requestsAuthorizationLevel2            = $false
+            'Approver' {
+                $permissions = @{
+                    listAccounts                = $true
+                    manageSafeMembers           = $true
+                    viewSafeMembers             = $true
+                    requestsAuthorizationLevel1 = $true
+                }
             }
-        }
-        'Full' {
-            $permissions = @{
-                useAccounts                            = $true
-                retrieveAccounts                       = $true
-                listAccounts                           = $true
-                addAccounts                            = $true
-                updateAccountContent                   = $true
-                updateAccountProperties                = $true
-                initiateCPMAccountManagementOperations = $true
-                specifyNextAccountContent              = $true
-                renameAccounts                         = $true
-                deleteAccounts                         = $true
-                unlockAccounts                         = $true
-                manageSafe                             = $true
-                manageSafeMembers                      = $true
-                backupSafe                             = $true
-                viewAuditLog                           = $true
-                viewSafeMembers                        = $true
-                accessWithoutConfirmation              = $true
-                createFolders                          = $true
-                deleteFolders                          = $true
-                moveAccountsAndFolders                 = $true
-                requestsAuthorizationLevel1            = $true
-                requestsAuthorizationLevel2            = $false
+            'AccountsManager' {
+                $permissions = @{
+                    useAccounts                            = $true
+                    retrieveAccounts                       = $true
+                    listAccounts                           = $true
+                    addAccounts                            = $true
+                    updateAccountContent                   = $true
+                    updateAccountProperties                = $true
+                    initiateCPMAccountManagementOperations = $true
+                    specifyNextAccountContent              = $true
+                    renameAccounts                         = $true
+                    deleteAccounts                         = $true
+                    unlockAccounts                         = $true
+                    manageSafeMembers                      = $true
+                    viewAuditLog                           = $true
+                    viewSafeMembers                        = $true
+                    accessWithoutConfirmation              = $true
+                    requestsAuthorizationLevel1            = $true
+                }
             }
-        }
-    }   # end if/else CustomPermissions
+            'Full' {
+                $permissions = @{
+                    useAccounts                            = $true
+                    retrieveAccounts                       = $true
+                    listAccounts                           = $true
+                    addAccounts                            = $true
+                    updateAccountContent                   = $true
+                    updateAccountProperties                = $true
+                    initiateCPMAccountManagementOperations = $true
+                    specifyNextAccountContent              = $true
+                    renameAccounts                         = $true
+                    deleteAccounts                         = $true
+                    unlockAccounts                         = $true
+                    manageSafe                             = $true
+                    manageSafeMembers                      = $true
+                    backupSafe                             = $true
+                    viewAuditLog                           = $true
+                    viewSafeMembers                        = $true
+                    accessWithoutConfirmation              = $true
+                    createFolders                          = $true
+                    deleteFolders                          = $true
+                    moveAccountsAndFolders                 = $true
+                    requestsAuthorizationLevel1            = $true
+                }
+            }
+        }   # end switch
+    }   # end else / end if CustomPermissions
 
-    If ($ownerName -NotIn $script:g_DefaultUsers) {
+    if ($ownerName -notin $script:g_DefaultUsers) {
         try {
             $safeMembersBody = @{
                 memberName               = $ownerName
                 searchIn                 = $memberSearchInLocation
                 membershipExpirationDate = $null
                 permissions              = $permissions
-            } | ConvertTo-Json -Depth 5 -Compress
+            }
+            if (-not [string]::IsNullOrEmpty($memberType)) {
+                $safeMembersBody.memberType = $memberType
+            }
+            $safeMembersBodyJson = $safeMembersBody | ConvertTo-Json -Depth 5 -Compress
 
             Write-LogMessage -type Verbose -MSG "Adding '$ownerName' (searchIn: $memberSearchInLocation) to '$safeName'..."
-            $setSafeMember = Invoke-Rest -Command POST -URI ($script:URL_SafeMembers -f $(ConvertTo-URL $safeName)) -Body $safeMembersBody -Header $Header
-            If ($null -ne $setSafeMember) {
+            $setSafeMember = Invoke-Rest -Command POST -URI ($script:URL_SafeMembers -f $(ConvertTo-URL $safeName)) -Body $safeMembersBodyJson -Header $Header
+            if ($null -ne $setSafeMember) {
                 Write-LogMessage -type Verbose -MSG "Member '$ownerName' successfully added to '$safeName' (role: $(if ($CustomPermissions) { 'Custom' } else { $ownerRole }))"
             }
+        } catch {
+            throw $(New-Object System.Exception ("Add-SafeOwner: Error setting membership for '$ownerName' on '$safeName'.", $PSItem.Exception))
         }
-        catch {
-            Throw $(New-Object System.Exception ("Add-SafeOwner: Error setting membership for '$ownerName' on '$safeName'.", $PSItem.Exception))
-        }
-    }
-    else {
+    } else {
         Write-LogMessage -type Info -MSG "Skipping default vault user '$ownerName'"
     }
 }
 
-Function Add-DefaultSafeMembers {
+function Add-DefaultSafeMembers {
     <#
 .SYNOPSIS
     Adds all DefaultSafeMembers from the resolved config to a safe.
@@ -1482,7 +1557,16 @@ Function Add-DefaultSafeMembers {
     }
     foreach ($member in $script:Config.DefaultSafeMembers) {
         try {
-            $searchIn = if ([string]::IsNullOrEmpty($member.SearchIn)) { 'Vault' } else { $member.SearchIn }
+            $searchIn = if ([string]::IsNullOrEmpty($member.SearchIn)) {
+                'Vault'
+            } else {
+                $member.SearchIn
+            }
+            $mType = if ([string]::IsNullOrEmpty($member.MemberType)) {
+                'User'
+            } else {
+                $member.MemberType
+            }
 
             # Resolve permissions source (priority: Permissions > RoleConfigSet > Role)
             if ($null -ne $member.Permissions) {
@@ -1496,10 +1580,10 @@ Function Add-DefaultSafeMembers {
                     ownerName              = $member.Name
                     CustomPermissions      = $customPerms
                     memberSearchInLocation = $searchIn
+                    memberType             = $mType
                 }
                 Add-SafeOwner @ownerParams
-            }
-            elseif (-not [string]::IsNullOrEmpty($member.RoleConfigSet)) {
+            } elseif (-not [string]::IsNullOrEmpty($member.RoleConfigSet)) {
                 $customPerms = $script:Config.RoleConfigSets[$member.RoleConfigSet]
                 if ($null -eq $customPerms) {
                     Write-LogMessage -type Warning -MSG "RoleConfigSet '$($member.RoleConfigSet)' not found for member '$($member.Name)' - skipping"
@@ -1512,10 +1596,10 @@ Function Add-DefaultSafeMembers {
                     ownerName              = $member.Name
                     CustomPermissions      = $customPerms
                     memberSearchInLocation = $searchIn
+                    memberType             = $mType
                 }
                 Add-SafeOwner @ownerParams
-            }
-            else {
+            } else {
                 Write-LogMessage -type Info -MSG "Adding default member '$($member.Name)' (role: $($member.Role)) to safe '$safeName'"
                 $ownerParams = @{
                     Header                 = $Header
@@ -1523,28 +1607,32 @@ Function Add-DefaultSafeMembers {
                     ownerName              = $member.Name
                     ownerRole              = $member.Role
                     memberSearchInLocation = $searchIn
+                    memberType             = $mType
                 }
                 Add-SafeOwner @ownerParams
             }
-        }
-        catch {
+        } catch {
             Write-LogMessage -type Warning -MSG "Failed to add default member '$($member.Name)' to '$safeName': $($PSItem.Exception.Message)"
         }
     }
 }
 
-Function New-AccountObject {
+function New-AccountObject {
     <#
 .SYNOPSIS
     Builds a CyberArk account object from a CSV row for bulk onboarding.
 .DESCRIPTION
     Maps standard CSV columns (accountUser, accountAddress, safeName, accountPlatform,
-    enableAutoMgmt, etc.) to the v2 Bulk Accounts API shape.
+    enableAutoMgmt, networkId, etc.) to the v2 Bulk Accounts API shape.
     Missing optional fields fall back to UserDefaults from $script:Config.
     If accountUser is blank, it is derived from the accountUserPattern in UserDefaults
     (replace * with userName). If no pattern is set, userName is used as-is.
     If accountAddress is blank, accountAddress from UserDefaults is used.
+    If networkId is blank in the CSV, it falls back to networkId in UserDefaults.
+    networkId is required by CyberArk Secrets Rotation (SRS); omit for CPM/on-prem.
     Unknown CSV columns are promoted to platformAccountProperties.
+    Unrecognised UserConfigSet keys (anything not in the reserved list) are also
+    promoted to platformAccountProperties; a CSV column for the same key takes priority.
 .PARAMETER AccountLine
     A single row from the accounts CSV, as a PSObject from Import-Csv.
 .OUTPUTS
@@ -1559,7 +1647,9 @@ Function New-AccountObject {
         # Helper: return CSV field value, falling back to UserDefaults if empty
         function Get-UserDefault {
             param([string]$fieldValue, [string]$fieldName)
-            if (-not [string]::IsNullOrEmpty($fieldValue)) { return $fieldValue }
+            if (-not [string]::IsNullOrEmpty($fieldValue)) {
+                return $fieldValue
+            }
             if ($null -ne $script:Config -and $script:Config.UserDefaults.ContainsKey($fieldName)) {
                 return [string]$script:Config.UserDefaults[$fieldName]
             }
@@ -1569,63 +1659,100 @@ Function New-AccountObject {
         $_safeName = $_platformID = ''
         # Resolve accountUser: CSV value → accountUserPattern from config → userName as fallback
         $_accountUser = Get-TrimmedString $AccountLine.accountUser
-        If ([string]::IsNullOrEmpty($_accountUser)) {
-            $_pattern = Get-UserDefault -fieldValue '' -fieldName 'accountUserPattern'
-            $_accountUser = If (-not [string]::IsNullOrEmpty($_pattern)) {
+        if ([string]::IsNullOrEmpty($_accountUser)) {
+            $_pattern = $script:Config.UserOptions['accountUserPattern']
+            $_accountUser = if (-not [string]::IsNullOrEmpty($_pattern)) {
                 $_pattern.Replace('*', (Get-TrimmedString $AccountLine.userName))
-            } Else {
+            } else {
                 Get-TrimmedString $AccountLine.userName
             }
         }
-        If ([string]::IsNullOrEmpty($_accountUser))  { throw 'Missing mandatory field: Account User Name' }
+        if ([string]::IsNullOrEmpty($_accountUser)) {
+            throw 'Missing mandatory field: Account User Name'
+        }
         # Resolve accountAddress: CSV value -> accountAddress in UserDefaults -> error
         $_accountAddress = Get-TrimmedString $AccountLine.accountAddress
-        If ([string]::IsNullOrEmpty($_accountAddress)) {
+        if ([string]::IsNullOrEmpty($_accountAddress)) {
             $_accountAddress = Get-UserDefault -fieldValue '' -fieldName 'accountAddress'
         }
-        If ([string]::IsNullOrEmpty($_accountAddress)) { throw 'Missing mandatory field: Account Address' }
-        If ([string]::IsNullOrEmpty($AccountLine.safeName))       { $_safeName = Get-PersonalSafeNameFromPattern -userName $AccountLine.userName }
-        Else                                                       { $_safeName = $AccountLine.safeName }
-        If ([string]::IsNullOrEmpty($AccountLine.accountPlatform)) { $_platformID = Get-UserDefault -fieldValue '' -fieldName 'accountPlatform' }
-        Else                                                        { $_platformID = $AccountLine.accountPlatform }
-        If ([string]::IsNullOrEmpty($_platformID))                  { $_platformID = $script:DEFAULT_PLATFORM_ID }
+        if ([string]::IsNullOrEmpty($_accountAddress)) {
+            throw 'Missing mandatory field: Account Address'
+        }
+        if ([string]::IsNullOrEmpty($AccountLine.safeName)) {
+            $_safeName = Get-PersonalSafeNameFromPattern -userName $AccountLine.userName
+        } else {
+            $_safeName = $AccountLine.safeName
+        }
+        if ([string]::IsNullOrEmpty($AccountLine.accountPlatform)) {
+            $_platformID = Get-UserDefault -fieldValue '' -fieldName 'accountPlatform'
+        } else {
+            $_platformID = $AccountLine.accountPlatform
+        }
+        if ([string]::IsNullOrEmpty($_platformID)) {
+            $_platformID = $script:DEFAULT_PLATFORM_ID
+        }
 
-        $excludedProperties = @('accountuser', 'accountaddress', 'accountplatform', 'name', 'username',
-            'address', 'safename', 'platformid', 'password', 'key', 'enableautomgmt', 'manualmgmtreason',
-            'groupname', 'groupplatformid', 'remotemachineaddresses', 'restrictmachineaccesstolist', 'sshkey',
+        $excludedProperties = @('accountuser', 'accountaddress', 'accountplatform', 'accountuserpattern',
+            'name', 'username', 'address', 'safename', 'platformid', 'password', 'key',
+            'enableautomgmt', 'manualmgmtreason', 'groupname', 'groupplatformid',
+            'remotemachineaddresses', 'restrictmachineaccesstolist', 'sshkey',
             'safeconfigset', 'userconfigset', 'cpmname', 'numberofdaysretention', 'numberofversionsretention',
-            'safenamepattern')
-        $customProps = $($AccountLine.PSObject.Properties | Where-Object { $_.Name.ToLower() -NotIn $excludedProperties })
+            'safenamepattern', 'networkid', 'createsafeonly')
+        $customProps = $($AccountLine.PSObject.Properties | Where-Object { $_.Name.ToLower() -notin $excludedProperties })
 
         $_Account = [PSCustomObject]@{
-            address                  = $_accountAddress
-            userName                 = $_accountUser
-            platformId               = (Get-TrimmedString $_platformID)
-            safeName                 = (Get-TrimmedString $_safeName)
-            secret                   = $AccountLine.password
+            address                   = $_accountAddress
+            userName                  = $_accountUser
+            platformId                = (Get-TrimmedString $_platformID)
+            safeName                  = (Get-TrimmedString $_safeName)
+            secret                    = $AccountLine.password
+            networkId                 = $null
             platformAccountProperties = $null
-            secretManagement         = [PSCustomObject]@{
+            secretManagement          = [PSCustomObject]@{
                 automaticManagementEnabled = $null
                 manualManagementReason     = $null
             }
-            remoteMachinesAccess     = $null
+            remoteMachinesAccess      = $null
         }
 
         if (-not [string]::IsNullOrEmpty($customProps)) {
             $_Account.platformAccountProperties = [PSCustomObject]@{}
             foreach ($prop in $customProps) {
-                If (-not [string]::IsNullOrEmpty($prop.Value)) {
+                if (-not [string]::IsNullOrEmpty($prop.Value)) {
                     $_Account.platformAccountProperties | Add-Member -MemberType NoteProperty -Name $prop.Name -Value (Get-TrimmedString $prop.Value)
                 }
             }
         }
 
-        $_enableAutoMgmt    = Get-UserDefault -fieldValue $AccountLine.enableAutoMgmt    -fieldName 'enableAutoMgmt'
-        $_manualMgmtReason  = Get-UserDefault -fieldValue $AccountLine.manualMgmtReason  -fieldName 'manualMgmtReason'
-        $_remoteMachines    = Get-UserDefault -fieldValue $AccountLine.remoteMachineAddresses   -fieldName 'remoteMachineAddresses'
-        $_restrictMachines  = Get-UserDefault -fieldValue $AccountLine.restrictMachineAccessToList -fieldName 'restrictMachineAccessToList'
+        # Promote unrecognised UserDefaults keys to platformAccountProperties.
+        # Reserved keys are handled explicitly above; CSV columns take priority (already set).
+        if ($null -ne $script:Config -and $script:Config.UserDefaults.Count -gt 0) {
+            foreach ($udKey in $script:Config.UserDefaults.Keys) {
+                if ($udKey.ToLower() -notin $excludedProperties) {
+                    $_udVal = [string]$script:Config.UserDefaults[$udKey]
+                    if (-not [string]::IsNullOrEmpty($_udVal)) {
+                        if ($null -eq $_Account.platformAccountProperties) {
+                            $_Account.platformAccountProperties = [PSCustomObject]@{}
+                        }
+                        if ($null -eq $_Account.platformAccountProperties.PSObject.Properties[$udKey]) {
+                            $_Account.platformAccountProperties | Add-Member -MemberType NoteProperty -Name $udKey -Value $_udVal
+                        }
+                    }
+                }
+            }
+        }
 
-        If (-not [String]::IsNullOrEmpty($_enableAutoMgmt)) {
+        $_networkId = Get-UserDefault -fieldValue $AccountLine.networkId -fieldName 'networkId'
+        $_enableAutoMgmt = Get-UserDefault -fieldValue $AccountLine.enableAutoMgmt -fieldName 'enableAutoMgmt'
+        $_manualMgmtReason = Get-UserDefault -fieldValue $AccountLine.manualMgmtReason -fieldName 'manualMgmtReason'
+        $_remoteMachines = Get-UserDefault -fieldValue $AccountLine.remoteMachineAddresses -fieldName 'remoteMachineAddresses'
+        $_restrictMachines = Get-UserDefault -fieldValue $AccountLine.restrictMachineAccessToList -fieldName 'restrictMachineAccessToList'
+
+        if (-not [string]::IsNullOrEmpty($_networkId)) {
+            $_Account.networkId = $_networkId
+        }
+
+        if (-not [String]::IsNullOrEmpty($_enableAutoMgmt)) {
             $_Account.secretManagement.automaticManagementEnabled = ConvertTo-Bool $_enableAutoMgmt
             if ($_Account.secretManagement.automaticManagementEnabled -eq $false) {
                 $_Account.secretManagement.manualManagementReason = $_manualMgmtReason
@@ -1636,25 +1763,34 @@ Function New-AccountObject {
             remoteMachines                   = $null
             accessRestrictedToRemoteMachines = $null
         }
-        If (-not [String]::IsNullOrEmpty($_remoteMachines)) {
-            $_Account.remoteMachinesAccess.remoteMachines                   = $_remoteMachines
+        if (-not [String]::IsNullOrEmpty($_remoteMachines)) {
+            $_Account.remoteMachinesAccess.remoteMachines = $_remoteMachines
             $_Account.remoteMachinesAccess.accessRestrictedToRemoteMachines = ConvertTo-Bool $_restrictMachines
         }
 
-        If ($null -eq $_Account.platformAccountProperties)                  { $_Account.PSObject.Properties.Remove('platformAccountProperties') }
-        If ($null -eq $_Account.remoteMachinesAccess.remoteMachines)         { $_Account.PSObject.Properties.Remove('remoteMachinesAccess') }
-        If ($null -eq $_Account.secretManagement.automaticManagementEnabled) { $_Account.PSObject.Properties.Remove('secretManagement') }
+        if ($null -eq $_Account.networkId) {
+            $_Account.PSObject.Properties.Remove('networkId')
+        }
+        if ($null -eq $_Account.platformAccountProperties) {
+            $_Account.PSObject.Properties.Remove('platformAccountProperties')
+        }
+        if ($null -eq $_Account.remoteMachinesAccess.remoteMachines) {
+            $_Account.PSObject.Properties.Remove('remoteMachinesAccess')
+        }
+        if ($null -eq $_Account.secretManagement.automaticManagementEnabled) {
+            $_Account.PSObject.Properties.Remove('secretManagement')
+        }
 
-        If (([string]::IsNullOrEmpty($_Account.userName) -or [string]::IsNullOrEmpty($_Account.Address)) -and
+        if (([string]::IsNullOrEmpty($_Account.userName) -or [string]::IsNullOrEmpty($_Account.Address)) -and
             (-not [string]::IsNullOrEmpty($_Account.name))) {
             $script:g_LogAccountName = $_Account.name
+        } else {
+            $script:g_LogAccountName = '{0}@{1}' -f $_Account.userName, $_Account.Address
         }
-        Else { $script:g_LogAccountName = '{0}@{1}' -f $_Account.userName, $_Account.Address }
 
         return $_Account
-    }
-    catch {
-        Throw $(New-Object System.Exception ('New-AccountObject: Error creating account object.', $PSItem.Exception))
+    } catch {
+        throw $(New-Object System.Exception ('New-AccountObject: Error creating account object.', $PSItem.Exception))
     }
 }
 #endregion Accounts and Safes Functions
@@ -1665,23 +1801,27 @@ Function New-AccountObject {
 
 Write-LogMessage -type Verbose -MSG $script:g_ScriptCommand
 Write-LogMessage -type Info -MSG "Starting script (v$ScriptVersion)" -Header
-if ($InDebug)   { Write-LogMessage -type Info -MSG 'Running in Debug Mode' }
-if ($InVerbose) { Write-LogMessage -type Info -MSG 'Running in Verbose Mode' }
+if ($InDebug) {
+    Write-LogMessage -type Info -MSG 'Running in Debug Mode'
+}
+if ($InVerbose) {
+    Write-LogMessage -type Info -MSG 'Running in Verbose Mode'
+}
 Write-LogMessage -type Debug -MSG "Running PowerShell version $($PSVersionTable.PSVersion.Major) compatible of versions $($PSVersionTable.PSCompatibleVersions -join ', ')"
 
-If ($ExecutionContext.SessionState.LanguageMode -ne 'FullLanguage') {
+if ($ExecutionContext.SessionState.LanguageMode -ne 'FullLanguage') {
     Write-LogMessage -type Error -MSG "PowerShell is running in $($ExecutionContext.SessionState.LanguageMode) mode which limits API methods used by this script."
     Write-LogMessage -type Info -MSG 'Script ended' -Footer
     return
 }
 
-If ([string]::IsNullOrEmpty($PVWAURL) -and [string]::IsNullOrEmpty($logonToken)) {
+if ([string]::IsNullOrEmpty($PVWAURL) -and [string]::IsNullOrEmpty($logonToken)) {
     Write-LogMessage -type Error -MSG 'PVWAURL is required when not using a pre-obtained logonToken.'
     Write-LogMessage -type Info -MSG 'Script ended' -Footer
     return
 }
 
-If (-not [string]::IsNullOrEmpty($PVWAURL)) {
+if (-not [string]::IsNullOrEmpty($PVWAURL)) {
     $PVWAURL = Format-PVWAURL -PVWAURL $PVWAURL
 }
 
@@ -1691,9 +1831,11 @@ Initialize-ScriptURLs
 Import-ScriptConfig
 
 # Apply config-resolved values to script parameters (only when not explicitly supplied)
-If (-not $PSBoundParameters.ContainsKey('SafeNamePattern')) { $SafeNamePattern = $script:Config.SafeNamePattern }
+if (-not $PSBoundParameters.ContainsKey('SafeNamePattern')) {
+    $SafeNamePattern = $script:Config.SafeNamePattern
+}
 
-If ($DisableCertificateValidation -and -not $script:g_SSLChanged) {
+if ($DisableCertificateValidation -and -not $script:g_SSLChanged) {
     Disable-SSLVerification
     $script:g_SSLChanged = $true
     Write-Warning 'Certificate validation is disabled. This should only be used for testing!'
@@ -1701,54 +1843,60 @@ If ($DisableCertificateValidation -and -not $script:g_SSLChanged) {
 
 # Resolve authentication
 # Priority: $logonToken (pass-through, no logoff) -> $PVWACredentials -> interactive prompt
-If (-not [string]::IsNullOrEmpty($logonToken)) {
+if (-not [string]::IsNullOrEmpty($logonToken)) {
     Write-LogMessage -type Info -MSG 'Using provided logon token. Session logoff will be skipped.'
     if ($logonToken.GetType().Name -eq 'String') {
         $script:g_LogonHeader = @{Authorization = $logonToken }
-    }
-    else {
+    } else {
         $script:g_LogonHeader = $logonToken
     }
     $script:g_ShouldLogoff = $false
-}
-ElseIf ($null -eq $PVWACredentials) {
+} elseif ($null -eq $PVWACredentials) {
     $PVWACredentials = $Host.UI.PromptForCredential(
         'Personal Privileged Accounts',
         "Enter your CyberArk credentials ($AuthenticationType)",
         '', '')
-    If ($null -eq $PVWACredentials) {
+    if ($null -eq $PVWACredentials) {
         Write-LogMessage -type Error -MSG 'Credentials are required to proceed.'
         Write-LogMessage -type Info -MSG 'Script ended' -Footer
         return
     }
 }
 
-If ([string]::IsNullOrEmpty($CSVPath)) {
+if ([string]::IsNullOrEmpty($CSVPath)) {
     $CSVPath = Open-FileDialog -LocationPath $script:g_CsvDefaultPath
 }
-If ([string]::IsNullOrEmpty($CSVPath)) {
+if ([string]::IsNullOrEmpty($CSVPath)) {
     Write-LogMessage -type Error -MSG 'No CSV file selected. Exiting.'
     Write-LogMessage -type Info -MSG 'Script ended' -Footer
     return
 }
 
 # Read CSV and process each account
-$accountsCSV          = Import-Csv $CSVPath
+$accountsCSV = Import-Csv $CSVPath
 $personalPrivAccounts = @()
-$counter              = 1
+$counter = 1
 
 # Saved before the loop so per-row overrides can be cleanly restored
-$baseConfig          = $script:Config
+$baseConfig = $script:Config
 $baseSafeNamePattern = $SafeNamePattern
 
 Write-LogMessage -type Info -MSG 'Creating needed personal safes and collecting accounts for onboard' -SubHeader
 
-ForEach ($account in $accountsCSV) {
+foreach ($account in $accountsCSV) {
     $rowHasOverride = $false
     try {
         # Per-row SafeConfigSet / UserConfigSet override
-        $rowSafeSet = if ($null -ne $account.PSObject.Properties['SafeConfigSet']) { $account.SafeConfigSet } else { '' }
-        $rowUserSet = if ($null -ne $account.PSObject.Properties['UserConfigSet']) { $account.UserConfigSet } else { '' }
+        $rowSafeSet = if ($null -ne $account.PSObject.Properties['SafeConfigSet']) {
+            $account.SafeConfigSet
+        } else {
+            ''
+        }
+        $rowUserSet = if ($null -ne $account.PSObject.Properties['UserConfigSet']) {
+            $account.UserConfigSet
+        } else {
+            ''
+        }
         $rowHasOverride = (-not [string]::IsNullOrEmpty($rowSafeSet)) -or (-not [string]::IsNullOrEmpty($rowUserSet))
 
         if ($rowHasOverride) {
@@ -1758,7 +1906,7 @@ ForEach ($account in $accountsCSV) {
                 $rowHasOverride = $false   # nothing to restore
                 continue
             }
-            $script:Config   = $rowConfig
+            $script:Config = $rowConfig
             $SafeNamePattern = $script:Config.SafeNamePattern
         }
 
@@ -1766,12 +1914,34 @@ ForEach ($account in $accountsCSV) {
         # NumberOfVersionsRetention and SafeNamePattern (if present and non-blank) take
         # priority over anything resolved from config sets, but are still below CLI params.
         # We make a shallow copy only when at least one column has a value.
-        $_rowCPM         = if ($null -ne $account.PSObject.Properties['CPMName'])                  { $account.CPMName }                  else { '' }
-        $_rowDays        = if ($null -ne $account.PSObject.Properties['NumberOfDaysRetention'])     { $account.NumberOfDaysRetention }     else { '' }
-        $_rowVersions    = if ($null -ne $account.PSObject.Properties['NumberOfVersionsRetention']) { $account.NumberOfVersionsRetention } else { '' }
-        $_rowSafePattern = if ($null -ne $account.PSObject.Properties['SafeNamePattern'])           { $account.SafeNamePattern }           else { '' }
+        $_rowCPM = if ($null -ne $account.PSObject.Properties['CPMName']) {
+            $account.CPMName
+        } else {
+            ''
+        }
+        $_rowDays = if ($null -ne $account.PSObject.Properties['NumberOfDaysRetention']) {
+            $account.NumberOfDaysRetention
+        } else {
+            ''
+        }
+        $_rowVersions = if ($null -ne $account.PSObject.Properties['NumberOfVersionsRetention']) {
+            $account.NumberOfVersionsRetention
+        } else {
+            ''
+        }
+        $_rowSafePattern = if ($null -ne $account.PSObject.Properties['SafeNamePattern']) {
+            $account.SafeNamePattern
+        } else {
+            ''
+        }
+        $_rowCreateSafeOnly = if ($null -ne $account.PSObject.Properties['createSafeOnly']) {
+            $account.createSafeOnly
+        } else {
+            ''
+        }
         if (-not [string]::IsNullOrEmpty($_rowCPM) -or -not [string]::IsNullOrEmpty($_rowDays) -or
-            -not [string]::IsNullOrEmpty($_rowVersions) -or -not [string]::IsNullOrEmpty($_rowSafePattern)) {
+            -not [string]::IsNullOrEmpty($_rowVersions) -or -not [string]::IsNullOrEmpty($_rowSafePattern) -or
+            -not [string]::IsNullOrEmpty($_rowCreateSafeOnly)) {
             # Clone config if we haven't already (rowHasOverride handles full sets; this is inline only)
             if (-not $rowHasOverride) {
                 $script:Config = @{
@@ -1782,21 +1952,31 @@ ForEach ($account in $accountsCSV) {
                     UserDefaults              = $script:Config.UserDefaults.Clone()
                     DefaultSafeMembers        = $script:Config.DefaultSafeMembers
                     RoleConfigSets            = $script:Config.RoleConfigSets
+                    SafeEndUserRole           = $script:Config.SafeEndUserRole
+                    SafeEndUserRoleConfigSet  = $script:Config.SafeEndUserRoleConfigSet
+                    SafeEndUserSearchIn       = $script:Config.SafeEndUserSearchIn
+                    SafeEndUserMemberType     = $script:Config.SafeEndUserMemberType
+                    SafeOptions               = $script:Config.SafeOptions.Clone()
+                    UserOptions               = $script:Config.UserOptions.Clone()
                 }
                 $rowHasOverride = $true
             }
-            if (-not [string]::IsNullOrEmpty($_rowCPM))         { $script:Config.CPMName = $_rowCPM }
-            if (-not [string]::IsNullOrEmpty($_rowDays)) {
-                $script:Config.NumberOfDaysRetention     = [int]$_rowDays
-                $script:Config.NumberOfVersionsRetention = $null
+            if (-not [string]::IsNullOrEmpty($_rowCPM)) {
+                $script:Config.CPMName = $_rowCPM
             }
-            elseif (-not [string]::IsNullOrEmpty($_rowVersions)) {
+            if (-not [string]::IsNullOrEmpty($_rowDays)) {
+                $script:Config.NumberOfDaysRetention = [int]$_rowDays
+                $script:Config.NumberOfVersionsRetention = $null
+            } elseif (-not [string]::IsNullOrEmpty($_rowVersions)) {
                 $script:Config.NumberOfVersionsRetention = [int]$_rowVersions
-                $script:Config.NumberOfDaysRetention     = $null
+                $script:Config.NumberOfDaysRetention = $null
             }
             if (-not [string]::IsNullOrEmpty($_rowSafePattern)) {
                 $script:Config.SafeNamePattern = $_rowSafePattern
                 $SafeNamePattern = $_rowSafePattern
+            }
+            if (-not [string]::IsNullOrEmpty($_rowCreateSafeOnly)) {
+                $script:Config.UserOptions['createSafeOnly'] = (ConvertTo-Bool $_rowCreateSafeOnly)
             }
         }
 
@@ -1805,41 +1985,113 @@ ForEach ($account in $accountsCSV) {
         $authHeader = Get-AuthHeader
 
         Write-LogMessage -type Info -MSG "Checking if safe '$($objAccount.safeName)' exists..."
-        If (-not $(Test-Safe -safeName $objAccount.safeName -Header $authHeader)) {
+        $safeIsNew = $false
+        $skipAccount = $false
+        if (-not $(Test-Safe -safeName $objAccount.safeName -Header $authHeader)) {
+            # Safe does not exist — create it. A new safe cannot contain any accounts.
+            $safeIsNew = $true
             Write-LogMessage -type Info -MSG "Creating safe '$($objAccount.safeName)' and adding '$($account.userName)' as owner"
             try {
-                If ($(Add-Safe -safeName $objAccount.safeName -Header $authHeader)) {
+                if ($(Add-Safe -safeName $objAccount.safeName -Header $authHeader)) {
+                    # Resolve owner permissions: SafeOwnerRoleConfigSet > SafeOwnerRole > 'AccountsManager'
+                    $_ownerCustomPerms = $null
+                    $_ownerRole = if (-not [string]::IsNullOrEmpty($script:Config.SafeEndUserRole)) {
+                        $script:Config.SafeEndUserRole
+                    } else {
+                        'EndUser'
+                    }
+                    if (-not [string]::IsNullOrEmpty($script:Config.SafeEndUserRoleConfigSet)) {
+                        $_ownerCustomPerms = $script:Config.RoleConfigSets[$script:Config.SafeEndUserRoleConfigSet]
+                        if ($null -eq $_ownerCustomPerms) {
+                            Write-LogMessage -type Warning -MSG "SafeEndUserRoleConfigSet '$($script:Config.SafeEndUserRoleConfigSet)' not found in RoleConfigSets - falling back to '$_ownerRole'"
+                        }
+                    }
                     $ownerParams = @{
                         Header    = $authHeader
                         safeName  = $objAccount.safeName
                         ownerName = $account.userName
-                        ownerRole = 'AccountsManager'
+                    }
+                    if (-not [string]::IsNullOrEmpty($script:Config.SafeEndUserSearchIn)) {
+                        $ownerParams.memberSearchInLocation = $script:Config.SafeEndUserSearchIn
+                    }
+                    if (-not [string]::IsNullOrEmpty($script:Config.SafeEndUserMemberType)) {
+                        $ownerParams.memberType = $script:Config.SafeEndUserMemberType
+                    }
+                    if ($null -ne $_ownerCustomPerms) {
+                        $ownerParams.CustomPermissions = $_ownerCustomPerms
+                    } else {
+                        $ownerParams.ownerRole = $_ownerRole
                     }
                     Add-SafeOwner @ownerParams
                     Add-DefaultSafeMembers -Header $authHeader -safeName $objAccount.safeName
                 }
+            } catch {
+                throw $(New-Object System.Exception ('Error creating safe or adding safe members', $PSItem.Exception))
             }
-            catch {
-                Throw $(New-Object System.Exception ('Error creating safe or adding safe members', $PSItem.Exception))
+        } elseif (-not $script:Config.SafeOptions['useExisting']) {
+            Write-LogMessage -type Error -MSG "Safe '$($objAccount.safeName)' already exists and SafeConfigSet option useExisting=false — row skipped."
+            $skipAccount = $true
+        }
+
+        # createSafeOnly: safe + members created above; skip account onboarding
+        $effectiveCreateSafeOnly = $CreateSafeOnly -or $script:Config.UserOptions['createSafeOnly']
+        if ($effectiveCreateSafeOnly) {
+            Write-LogMessage -type Info -MSG "createSafeOnly: safe '$($objAccount.safeName)' created/verified; skipping account onboard for '$($account.userName)'"
+            $skipAccount = $true
+        }
+
+        # Duplicate account check — only for existing safes (new safes cannot have accounts)
+        $effectiveAllowDup = $AllowDuplicateAccounts -or $script:Config.UserOptions['allowDuplicateAccounts']
+        if (-not $skipAccount -and -not $safeIsNew -and -not $effectiveAllowDup) {
+            $dupFilter = "safeName eq $($objAccount.safeName) AND userName eq $($objAccount.userName) AND address eq $($objAccount.address) AND platformId eq $($objAccount.platformId)"
+            $dupURL = $script:URL_Accounts + '?filter=' + [URI]::EscapeDataString($dupFilter)
+            Write-LogMessage -type Verbose -MSG "Checking for duplicate account: $dupFilter"
+            try {
+                $dupResult = Invoke-Rest -Command GET -URI $dupURL -Header $authHeader -ErrAction 'SilentlyContinue'
+                if ($null -ne $dupResult -and $dupResult.count -gt 0) {
+                    Write-LogMessage -type Warning -MSG "Duplicate account detected — safe '$($objAccount.safeName)' already contains an account for '$($objAccount.userName)' @ '$($objAccount.address)' (platform: '$($objAccount.platformId)'). Skipping. Use -AllowDuplicateAccounts or set allowDuplicateAccounts=true in UserConfigSet.Options to override."
+                    $skipAccount = $true
+                }
+            } catch {
+                # Multi-field AND filter may not be supported (e.g. PCloud) — fall back to safeName-only
+                Write-LogMessage -type Verbose -MSG 'Multi-field filter unsupported, falling back to safeName-only duplicate check'
+                try {
+                    $fallbackFilter = "safeName eq $($objAccount.safeName)"
+                    $fallbackURL = $script:URL_Accounts + '?filter=' + [URI]::EscapeDataString($fallbackFilter) + '&limit=1000'
+                    $fallbackResult = Invoke-Rest -Command GET -URI $fallbackURL -Header $authHeader -ErrAction 'SilentlyContinue'
+                    if ($null -ne $fallbackResult -and $fallbackResult.count -gt 0) {
+                        $dupMatch = $fallbackResult.value | Where-Object {
+                            $PSItem.userName -eq $objAccount.userName -and
+                            $PSItem.address -eq $objAccount.address -and
+                            $PSItem.platformId -eq $objAccount.platformId
+                        }
+                        if ($null -ne $dupMatch) {
+                            Write-LogMessage -type Warning -MSG "Duplicate account detected — safe '$($objAccount.safeName)' already contains an account for '$($objAccount.userName)' @ '$($objAccount.address)' (platform: '$($objAccount.platformId)'). Skipping. Use -AllowDuplicateAccounts or set allowDuplicateAccounts=true in UserConfigSet.Options to override."
+                            $skipAccount = $true
+                        }
+                    }
+                } catch {
+                    Write-LogMessage -type Warning -MSG "Could not verify duplicates for '$($objAccount.userName)' in '$($objAccount.safeName)': $($PSItem.Exception.Message). Proceeding with onboard."
+                }
             }
         }
 
-        $objAccount | Add-Member -NotePropertyName uploadIndex -NotePropertyValue $counter
-        $personalPrivAccounts += $objAccount
-        $counter++
+        if (-not $skipAccount) {
+            $objAccount | Add-Member -NotePropertyName uploadIndex -NotePropertyValue $counter
+            $personalPrivAccounts += $objAccount
+            $counter++
+        }
 
         # Logoff per-iteration session only when we own it and are not using RADIUS
-        If ($script:g_ShouldLogoff -and $AuthenticationType -ne 'radius') {
+        if ($script:g_ShouldLogoff -and $AuthenticationType -ne 'radius') {
             Invoke-Logoff -Header $authHeader
         }
-    }
-    catch {
+    } catch {
         Write-LogMessage -type Error -MSG "Error onboarding '$($script:g_LogAccountName)' into the Vault. Error: $(Join-ExceptionMessage $PSItem.Exception)"
-    }
-    finally {
+    } finally {
         # Restore base config so the next row starts clean
         if ($rowHasOverride) {
-            $script:Config   = $baseConfig
+            $script:Config = $baseConfig
             $SafeNamePattern = $baseSafeNamePattern
         }
     }
@@ -1848,7 +2100,7 @@ ForEach ($account in $accountsCSV) {
 # Bulk onboard all collected accounts
 $authHeader = $null
 try {
-    If ($personalPrivAccounts.Count -gt 0) {
+    if ($personalPrivAccounts.Count -gt 0) {
         Write-LogMessage -type Info -MSG "Starting bulk onboard of $($personalPrivAccounts.Count) personal privileged accounts"
 
         $authHeader = Get-AuthHeader
@@ -1871,7 +2123,7 @@ try {
             switch ($bulkResult.Status) {
                 'completedWithErrors' {
                     Write-LogMessage -type Info -MSG ('{0} accounts onboarded successfully; {1} failed' -f $bulkResult.Result.succeeded, $bulkResult.Result.failed)
-                    ForEach ($item in $bulkResult.FailedItems.Items) {
+                    foreach ($item in $bulkResult.FailedItems.Items) {
                         $failedAccount = '{0}@{1} (index: {2})' -f $item.userName, $item.address, $item.uploadIndex
                         Write-LogMessage -type Info -MSG ('Account {0} failed: {1}' -f $failedAccount, $item.error)
                     }
@@ -1883,19 +2135,15 @@ try {
                     Write-LogMessage -type Info -MSG ('{0} accounts successfully onboarded' -f $bulkResult.Result.succeeded)
                 }
             }
+        } else {
+            throw 'The Bulk Account Upload ID returned empty'
         }
-        else {
-            Throw 'The Bulk Account Upload ID returned empty'
-        }
-    }
-    else {
+    } else {
         Write-LogMessage -type Info -MSG 'No personal privileged accounts to onboard'
     }
-}
-catch {
+} catch {
     Write-LogMessage -type Error -MSG "Error during bulk onboarding: $(Join-ExceptionMessage $_.Exception)"
-}
-finally {
+} finally {
     # Logoff only if we own the session
     if ($script:g_ShouldLogoff -and $null -ne $authHeader) {
         Invoke-Logoff -Header $authHeader

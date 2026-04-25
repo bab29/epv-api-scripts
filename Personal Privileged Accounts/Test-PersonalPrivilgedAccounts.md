@@ -1,6 +1,6 @@
 # E2E Test Plan — `Create-PersonalPrivilgedAccounts.ps1`
 
-Test runner: `Test-PersonalPrivilgedAccountsv2.ps1`
+Test runner: `Test-PersonalPrivilgedAccounts.ps1`
 Target script: `Create-PersonalPrivilgedAccounts.ps1`
 Framework: Plain PowerShell (no Pester required)
 Environment: Live CyberArk vault (on-premises or Privilege Cloud)
@@ -13,10 +13,10 @@ Two committed fixture files ship alongside the test runner. They serve as docume
 
 | File | Purpose |
 | --- | --- |
-| `Test-PersonalPrivilgedAccountsv2.csv` | Static CSV with four rows: `testuser1`/`testuser2` (baseline), `testuser3` (SafeConfigSet=alt), `testuser4` (SafeConfigSet=DoesNotExistXYZ). Safe names are fixed — only use in a fresh environment. |
-| `Test-PersonalPrivilgedAccountsv2.json` | Minimal config: `default` set (7-day retention) and `alt` set (14-day retention) under `SafeConfigSet`. No `DefaultSafeMembers`, no vault group dependencies. |
+| `Test-PersonalPrivilgedAccounts.csv` | Static CSV with four rows: `testuser1`/`testuser2` (baseline), `testuser3` (SafeConfigSet=alt), `testuser4` (SafeConfigSet=DoesNotExistXYZ). Safe names are fixed — only use in a fresh environment. |
+| `Test-PersonalPrivilgedAccounts.json` | Minimal config: `default` set (7-day retention) and `alt` set (14-day retention) under `SafeConfigSet`. No `DefaultSafeMembers`, no vault group dependencies. |
 
-> **Note:** The automated test runner (`Test-PersonalPrivilgedAccountsv2.ps1`) does **not** use these files directly. It generates its own temporary CSV and config with unique `e<runId>*` usernames at runtime, then deletes them in the `finally` block. The fixture files are provided for reference and manual use only.
+> **Note:** The automated test runner (`Test-PersonalPrivilgedAccounts.ps1`) does **not** use these files directly. It generates its own temporary CSV and config with unique `e<runId>*` usernames at runtime, then deletes them in the `finally` block. The fixture files are provided for reference and manual use only.
 
 ---
 
@@ -38,7 +38,7 @@ Every invocation of the test runner generates a unique **Run ID** (`MMddHHmmss`)
 
 ## Test data
 
-Two accounts are created per run, exercising distinct code paths:
+Four test users are created per run, exercising distinct code paths:
 
 | Field | User 1 | User 2 | User 3 | User 4 |
 | --- | --- | --- | --- | --- |
@@ -90,7 +90,8 @@ Direct `GET /api/Safes/{safeName}/Members/{memberName}` REST calls.
 | --- | --- | --- | --- |
 | **T04** | `e<runId>1` is a member of `e<runId>1_ADM` | `GET /Members/e<runId>1` returns non-null | Owner was added with `Add-SafeOwner` |
 | **T05** | `e<runId>2` is a member of `e<runId>2_ADM` | `GET /Members/e<runId>2` returns non-null | Owner was added with `Add-SafeOwner` |
-| **T06** | `e<runId>1` has `addAccounts = true` | `member.permissions.addAccounts -eq $true` | Confirms `AccountsManager` role was applied correctly |
+| **T06** | `e<runId>1` has `viewAuditLog = true` | `member.permissions.viewAuditLog -eq $true` | Confirms `EndUser` role was applied correctly |
+| **T17** | `e<runId>3` has `retrieveAccounts = false` | `member.permissions.retrieveAccounts -ne $true` | Confirms `SafeEndUserRoleConfigSet = 'CustomSafeUser'` from `alt` set was applied (CustomSafeUser grants only `useAccounts` + `listAccounts`) |
 
 ---
 
@@ -144,7 +145,7 @@ The main script is invoked a second time with identical parameters. Safes and me
 
 | Outcome | Condition |
 | --- | --- |
-| **All pass** | Exit code `0`; all 16 assertions `PASS` |
+| **All pass** | Exit code `0`; all 17 assertions `PASS` |
 | **Partial failure** | Exit code equals the number of failed assertions |
 | **Fatal error** | Script throws an unhandled exception; remaining assertions are skipped |
 
@@ -157,34 +158,35 @@ The main script is invoked a second time with identical parameters. Safes and me
 ```powershell
 Import-Module G:\epv-api-scripts\.Defaults\CyberArkDefaults.psd1
 Set-CyberArkDefaults -PVWAUrl https://pvwa.lab.local/PasswordVault
-.\Test-PersonalPrivilgedAccountsv2.ps1 -AccountPlatform WinDomain
+.\Test-PersonalPrivilgedAccounts.ps1 -AccountPlatform WinDomain
 ```
 
 **Explicit credential prompt:**
 
 ```powershell
-.\Test-PersonalPrivilgedAccountsv2.ps1 -PVWAURL https://pvwa.lab.local/PasswordVault -AccountPlatform WinDomain
+.\Test-PersonalPrivilgedAccounts.ps1 -PVWAURL https://pvwa.lab.local/PasswordVault -AccountPlatform WinDomain
 ```
 
 **With a PSCredential object:**
 
 ```powershell
 $cred = Get-Credential
-.\Test-PersonalPrivilgedAccountsv2.ps1 -PVWAURL https://pvwa.lab.local/PasswordVault -PVWACredentials $cred -AccountPlatform WinDomain
+.\Test-PersonalPrivilgedAccounts.ps1 -PVWAURL https://pvwa.lab.local/PasswordVault -PVWACredentials $cred -AccountPlatform WinDomain
 ```
 
 **Privilege Cloud (pre-obtained token):**
 
 ```powershell
-$token = Get-IdentityHeader @{
-    IdentityTenantURL  = 'https://tenant.id.cyberark.cloud'
-    PCloudTenantAPIURL = 'https://tenant.privilegecloud.cyberark.cloud'
-}
+# Get-IdentityHeader returns a header hashtable: @{ Authorization = "Bearer ..."; 'X-IDAP-NATIVE-CLIENT' = 'true' }
+# PVWAURL is never embedded in the token — it must always be supplied separately.
+$PCloudURL = 'https://tenant.privilegecloud.cyberark.cloud/PasswordVault'
+$token = Get-IdentityHeader -IdentityUserName 'user@company.com' -PCloudURL $PCloudURL
 $params = @{
     logonToken      = $token
+    PVWAURL         = $PCloudURL
     AccountPlatform = 'WinDomain'
 }
-.\Test-PersonalPrivilgedAccountsv2.ps1 @params
+.\Test-PersonalPrivilgedAccounts.ps1 @params
 ```
 
 **With self-signed certificate:**
@@ -195,7 +197,7 @@ $params = @{
     DisableCertificateValidation = $true
     AccountPlatform              = 'WinDomain'
 }
-.\Test-PersonalPrivilgedAccountsv2.ps1 @params
+.\Test-PersonalPrivilgedAccounts.ps1 @params
 ```
 
 **Manual run using the committed fixture files (fresh environment only):**
@@ -205,8 +207,8 @@ $params = @{
 # Safe names are static (testuser1_ADM / testuser2_ADM) — do not use if those safes already exist.
 $params = @{
     PVWAURL    = 'https://pvwa.lab.local/PasswordVault'
-    CSVPath    = '.\Test-PersonalPrivilgedAccountsv2.csv'
-    ConfigPath = '.\Test-PersonalPrivilgedAccountsv2.json'
+    CSVPath    = '.\Test-PersonalPrivilgedAccounts.csv'
+    ConfigPath = '.\Test-PersonalPrivilgedAccounts.json'
 }
 .\Create-PersonalPrivilgedAccounts.ps1 @params
 ```

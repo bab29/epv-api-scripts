@@ -5,23 +5,26 @@
                 "useExisting": true
             },
             "Properties": {
-                "CPMName": "PasswordManager",
+                "CPMName": "BAB-PCloud",
                 "NumberOfDaysRetention": 7,
                 "SafeNamePattern": "*_ADM",
                 "DefaultSafeMembers": [
                     {
-                        "Name": "AdminGroup",
+                        "Name": "BAB-SafeAdmins",
                         "Role": "Full",
-                        "SearchIn": "Vault"
+                        "SearchIn": "C30B30B1-0B46-49AC-8D99-F6279EED7999",
+                        "MemberType": "Role"
                     },
                     {
-                        "Name": "AuditGroup",
+                        "Name": "BAB-SafeAuditors",
                         "RoleConfigSet": "CustomAudit",
-                        "SearchIn": "Vault"
+                        "SearchIn": "C30B30B1-0B46-49AC-8D99-F6279EED7999",
+                        "MemberType": "Role"
                     },
                     {
-                        "Name": "SpecialGroup",
-                        "SearchIn": "Vault",
+                        "Name": "BAB-Test",
+                        "SearchIn": "C30B30B1-0B46-49AC-8D99-F6279EED7999",
+                        "MemberType": "Role",
                         "Permissions": {
                             "useAccounts": true,
                             "retrieveAccounts": false,
@@ -48,7 +51,9 @@
                         }
                     }
                 ],
-                "SafeEndUserRole": "EndUser"
+                "SafeEndUserRole": "EndUser",
+                "SafeEndUserSearchIn": "C30B30B1-0B46-49AC-8D99-F6279EED7999",
+                "SafeEndUserMemberType": "User"
             }
         },
         "prod": {
@@ -56,19 +61,21 @@
                 "useExisting": true
             },
             "Properties": {
-                "CPMName": "PasswordManager",
+                "CPMName": "BAB-PCloud",
                 "NumberOfVersionsRetention": 10,
                 "SafeNamePattern": "*_ADM",
                 "DefaultSafeMembers": [
                     {
-                        "Name": "ProdAdmins",
+                        "Name": "BAB-SafeAdmins",
                         "Role": "Full",
-                        "SearchIn": "Vault"
+                        "SearchIn": "C30B30B1-0B46-49AC-8D99-F6279EED7999",
+                        "MemberType": "Role"
                     },
                     {
-                        "Name": "ProdAuditors",
+                        "Name": "BAB-SafeAuditors",
                         "RoleConfigSet": "CustomAudit",
-                        "SearchIn": "Vault"
+                        "SearchIn": "C30B30B1-0B46-49AC-8D99-F6279EED7999",
+                        "MemberType": "Role"
                     }
                 ]
             }
@@ -78,14 +85,15 @@
                 "useExisting": true
             },
             "Properties": {
-                "CPMName": "PasswordManager",
+                "CPMName": "BAB-PCloud",
                 "NumberOfDaysRetention": 30,
                 "SafeNamePattern": "*_DEV",
                 "DefaultSafeMembers": [
                     {
-                        "Name": "DevAdmins",
+                        "Name": "BAB-SafeAdmins",
                         "Role": "AccountsManager",
-                        "SearchIn": "Vault"
+                        "SearchIn": "C30B30B1-0B46-49AC-8D99-F6279EED7999",
+                        "MemberType": "Role"
                     }
                 ]
             }
@@ -95,15 +103,18 @@
                 "useExisting": true
             },
             "Properties": {
-                "CPMName": "PasswordManager",
+                "CPMName": "BAB-PCloud",
                 "NumberOfDaysRetention": 7,
                 "SafeNamePattern": "TST_*",
                 "SafeEndUserRole": "EndUser",
+                "SafeEndUserSearchIn": "C30B30B1-0B46-49AC-8D99-F6279EED7999",
+                "SafeEndUserMemberType": "User",
                 "DefaultSafeMembers": [
                     {
-                        "Name": "Vault Admins",
-                        "SearchIn": "vault",
-                        "Role": "Full"
+                        "Name": "Privilege Cloud Administrators",
+                        "SearchIn": "Vault",
+                        "Role": "Full",
+                        "MemberType": "Role"
                     }
                 ]
             }
