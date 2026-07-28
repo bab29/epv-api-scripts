@@ -41,6 +41,8 @@ VERSION HISTORY:
                     IncludeSystemMembers merged with IncludePredefinedUsers (single flag)
 2.2.1   2026-07-27  Replaced AllSafeDetails re-fetch with dedicated -IncludeQuota switch
                     AllSafeDetails uses list endpoint only; -IncludeQuota triggers per-safe detail calls
+2.3.0   2026-07-28  Added -IncludeSource switch: populates Source column via bulk GET /api/Users
+                    Reuses $usersHT (same bulk call as -AllSafeDetails) - no extra API calls if combined
 ########################################################################### #>
 [CmdletBinding(DefaultParameterSetName = 'SafeMgmt')]
 param
@@ -118,6 +120,11 @@ param
     # Return group members only; mutually exclusive with -IncludeGroups
     [Parameter(Mandatory = $false)]
     [Switch]$GroupsOnly,
+
+    # Fetch source field for each member from the individual user API endpoint (GET /api/Users/{id})
+    # Results are cached per unique user to minimize API calls
+    [Parameter(Mandatory = $false)]
+    [Switch]$IncludeSource,
 
     # Timestamp format for date fields in output: Epoch (raw), UTC (readable UTC string), Local (local time)
     [Parameter(Mandatory = $false)]
@@ -519,10 +526,10 @@ if (-not $Members.IsPresent) {
 [hashtable]$safesHT = @{}
 $allSafes | ForEach-Object { $safesHT[$_.SafeName] = $_ }
 
-# Users API only needed when -Members -AllSafeDetails is used (Source/UserType columns in output)
+# Users API needed when -Members -AllSafeDetails or -Members -IncludeSource is used
 [hashtable]$usersHT = @{}
-if ($Members.IsPresent -and $AllSafeDetails.IsPresent) {
-    Write-Verbose 'Retrieving users for Source/UserType enrichment (-Members -AllSafeDetails)...'
+if ($Members.IsPresent -and ($AllSafeDetails.IsPresent -or $IncludeSource.IsPresent)) {
+    Write-Verbose 'Retrieving users for Source/UserType enrichment (-Members -AllSafeDetails / -IncludeSource)...'
     $userUrl = "${URL_Users}?limit=1000"
     do {
         Write-Verbose "Users: GET $userUrl"
@@ -670,6 +677,7 @@ else {
     # -Members -AllSafeDetails: adds safe context columns
     if (-not $AllSafeDetails) {
         [array]$smBaseProps = @('safename', 'member', 'MemberLocation', 'MemberType', 'membershipExpirationDate')
+        if ($IncludeSource) { $smBaseProps += 'Source' }
     }
     else {
         # Members + safe details
