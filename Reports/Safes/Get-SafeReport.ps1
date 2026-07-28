@@ -43,6 +43,9 @@ VERSION HISTORY:
                     AllSafeDetails uses list endpoint only; -IncludeQuota triggers per-safe detail calls
 2.3.0   2026-07-28  Added -IncludeSource switch: populates Source column via bulk GET /api/Users
                     Reuses $usersHT (same bulk call as -AllSafeDetails) - no extra API calls if combined
+2.4.0   2026-07-28  Added Write-LogMessage and Remove-SensitiveData (modeled on Safe-Management.ps1)
+                    Log file written to script directory: Get-SafeReport_<date>.log
+                    Added -IncludeCallStack and -UseVerboseFile DontShow parameters
 ########################################################################### #>
 [CmdletBinding(DefaultParameterSetName = 'SafeMgmt')]
 param
@@ -137,11 +140,26 @@ param
 
     # Include only these specific permission columns (Safe-Management.ps1 format only; cannot combine with -EPVFormat)
     [Parameter(Mandatory = $false, ParameterSetName = 'SafeMgmt')]
-    $PermList
+    $PermList,
+
+    [Parameter(Mandatory = $false, DontShow, HelpMessage = 'Include Call Stack in Verbose output')]
+    [switch]$IncludeCallStack,
+
+    [Parameter(Mandatory = $false, DontShow)]
+    [switch]$UseVerboseFile
     #endregion
 )
 
 #region Setup
+$ScriptLocation = Split-Path -Parent $MyInvocation.MyCommand.Path
+$Global:ScriptName = $MyInvocation.MyCommand.Path.Replace("$ScriptLocation\", '')
+$global:InDebug = $PSBoundParameters.Debug.IsPresent
+$global:InVerbose = $PSBoundParameters.Verbose.IsPresent
+$global:IncludeCallStack = $IncludeCallStack.IsPresent
+$global:UseVerboseFile = $UseVerboseFile.IsPresent
+$global:LOG_DATE = $(Get-Date -Format yyyyMMdd) + '-' + $(Get-Date -Format HHmmss)
+$global:LOG_FILE_PATH = "$ScriptLocation\Get-SafeReport_$LOG_DATE.log"
+$ScriptVersion = '2.4.0'
 $script:DoLogoff = $false
 $script:LastHttpError = $null
 
@@ -178,17 +196,127 @@ $URL_Logon = "${URL_PVWAAPI}/auth/$PVWAAuthType/Logon"
 $URL_Logoff = "${URL_PVWAAPI}/Auth/Logoff"
 $URL_Safes = "${URL_PVWAAPI}/Safes"
 $URL_Users = "${URL_PVWAAPI}/Users"
-Write-Verbose "Setup: URL_Safes = $URL_Safes"
-Write-Verbose "Setup: URL_Users = $URL_Users"
-
-# Parameter mutual-exclusion check before any API calls
-if ($IncludeGroups -and $GroupsOnly) {
-    Write-Error '-IncludeGroups and -GroupsOnly cannot be combined. Use -IncludeGroups for users + groups, or -GroupsOnly for groups only.'
-    return
-}
 #endregion
 
 #region Functions
+function Remove-SensitiveData {
+    [CmdletBinding()]
+    param (
+        [Alias('MSG', 'value', 'string')]
+        [Parameter(Mandatory = $true, Position = 0)]
+        [string]$message
+    )
+    begin { $cleanedMessage = $message }
+    process {
+        if ($global:LogSensitiveData -eq $true) { return $message }
+        $checkFor = @('password', 'secret', 'NewCredentials', 'access_token', 'client_secret', 'auth', 'Authorization', 'Answer', 'Token')
+        $checkFor | ForEach-Object {
+            if ($cleanedMessage -imatch "[{\\""']{2,}\s{0,}$PSitem\s{0,}[\\""']{2,}\s{0,}[:=][\\""']{2,}\s{0,}(?<Sensitive>.*?)\s{0,}[\\""']{2,}(?=[,:;])") {
+                $cleanedMessage = $cleanedMessage.Replace($Matches['Sensitive'], '****')
+            }
+            elseif ($cleanedMessage -imatch "[""']{1,}\s{0,}$PSitem\s{0,}[""']{1,}\s{0,}[:=][""']{1,}\s{0,}(?<Sensitive>.*?)\s{0,}[""']{1,}") {
+                $cleanedMessage = $cleanedMessage.Replace($Matches['Sensitive'], '****')
+            }
+            elseif ($cleanedMessage -imatch "(?:\s{0,}$PSitem\s{0,}[:=])\s{0,}(?<Sensitive>.*?)(?=; |:|,|}|\))") {
+                $cleanedMessage = $cleanedMessage.Replace($Matches['Sensitive'], '****')
+            }
+        }
+    }
+    end { return $cleanedMessage }
+}
+
+function Write-LogMessage {
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowEmptyString()]
+        [String]$MSG,
+        [Parameter(Mandatory = $false)]
+        [Switch]$Header,
+        [Parameter(Mandatory = $false)]
+        [Switch]$SubHeader,
+        [Parameter(Mandatory = $false)]
+        [Switch]$Footer,
+        [Parameter(Mandatory = $false)]
+        [ValidateSet('Info', 'Warning', 'Error', 'Debug', 'Verbose')]
+        [String]$type = 'Info',
+        [Parameter(Mandatory = $false)]
+        [String]$LogFile = $LOG_FILE_PATH,
+        [Parameter(Mandatory = $false)]
+        [int]$pad = 20
+    )
+    $verboseFile = $($LOG_FILE_PATH.replace('.log', '_Verbose.log'))
+    try {
+        if ($Header) {
+            '=======================================' | Out-File -Append -FilePath $LOG_FILE_PATH
+            Write-Host '======================================================='
+        }
+        elseif ($SubHeader) {
+            '------------------------------------' | Out-File -Append -FilePath $LOG_FILE_PATH
+            Write-Host '------------------------------------'
+        }
+        $LogTime = "[$(Get-Date -Format 'yyyy-MM-dd hh:mm:ss')]`t"
+        $msgToWrite = "$LogTime"
+        $writeToFile = $true
+        if ([string]::IsNullOrEmpty($Msg)) { $Msg = 'N/A' }
+        $Msg = Remove-SensitiveData -Msg $Msg
+        switch ($type) {
+            'Info' {
+                Write-Host $MSG.ToString()
+                $msgToWrite += "[INFO]`t`t$Msg"
+            }
+            'Warning' {
+                Write-Host $MSG.ToString() -ForegroundColor DarkYellow
+                $msgToWrite += "[WARNING]`t$Msg"
+                if ($global:UseVerboseFile) { $msgToWrite | Out-File -Append -FilePath $verboseFile }
+            }
+            'Error' {
+                Write-Host $MSG.ToString() -ForegroundColor Red
+                $msgToWrite += "[ERROR]`t$Msg"
+                if ($global:UseVerboseFile) { $msgToWrite | Out-File -Append -FilePath $verboseFile }
+            }
+            'Debug' {
+                if ($global:InDebug -or $global:InVerbose) {
+                    Write-Debug $MSG
+                    $writeToFile = $true
+                    $msgToWrite += "[DEBUG]`t$Msg"
+                }
+                else { $writeToFile = $false }
+            }
+            'Verbose' {
+                if ($global:InVerbose -or $global:UseVerboseFile) {
+                    $arrMsg = $msg.split(":`t", 2)
+                    if ($arrMsg.Count -gt 1) { $msg = $arrMsg[0].PadRight($pad) + $arrMsg[1] }
+                    $msgToWrite += "[VERBOSE]`t$Msg"
+                    if ($global:IncludeCallStack) {
+                        $stack = ''
+                        $excludeItems = @('Write-LogMessage', '<ScriptBlock>')
+                        Get-PSCallStack | ForEach-Object {
+                            if ($PSItem.Command -notin $excludeItems) {
+                                $command = if ($PSitem.Command -eq $Global:ScriptName) { 'Base' } elseif ([string]::IsNullOrEmpty($PSitem.Command)) { '**Blank**' } else { $PSitem.Command }
+                                $stack += "$command $($PSItem.Location); "
+                            }
+                        }
+                        Write-Verbose "CallStack:`t$stack"
+                        $msgToWrite += "`n$LogTime[STACK]`t`t$stack"
+                    }
+                    if ($global:InVerbose) { Write-Verbose $MSG }
+                    else { $writeToFile = $false }
+                    if ($global:UseVerboseFile) { $msgToWrite | Out-File -Append -FilePath $verboseFile }
+                }
+                else { $writeToFile = $false }
+            }
+        }
+        if ($writeToFile) { $msgToWrite | Out-File -Append -FilePath $LOG_FILE_PATH }
+        if ($Footer) {
+            '=======================================' | Out-File -Append -FilePath $LOG_FILE_PATH
+            Write-Host '======================================================='
+        }
+    }
+    catch {
+        Write-Error "Error in Write-LogMessage: $($_.Exception.Message)"
+    }
+}
+
 function Invoke-Rest {
     [CmdletBinding()]
     param (
@@ -213,7 +341,7 @@ function Invoke-Rest {
     )
 
     try {
-        Write-Verbose "Invoke-Rest: $Command $URI"
+        Write-LogMessage -type Verbose -MSG "Invoke-Rest: $Command $URI"
         if ([string]::IsNullOrEmpty($Body)) {
             $restParams = @{
                 Uri         = $URI
@@ -238,7 +366,7 @@ function Invoke-Rest {
             }
         }
         $response = Invoke-RestMethod @restParams
-        Write-Verbose "Invoke-Rest: Response type=$($response.GetType().Name) keys=[$($response.PSObject.Properties.Name -join ', ')]"
+        Write-LogMessage -type Verbose -MSG "Invoke-Rest: Response type=$($response.GetType().Name) keys=[$($response.PSObject.Properties.Name -join ', ')]"
         return $response
     }
     catch {
@@ -246,10 +374,10 @@ function Invoke-Rest {
             throw
         }
         # Surface the error in verbose even when suppressed
-        Write-Verbose "Invoke-Rest: Caught error (SilentlyContinue) - $($_.Exception.Message)"
+        Write-LogMessage -type Verbose -MSG "Invoke-Rest: Caught error (SilentlyContinue) - $($_.Exception.Message)"
         if ($_.Exception.Response) {
             $statusCode = [int]$_.Exception.Response.StatusCode
-            Write-Verbose "Invoke-Rest: HTTP $statusCode $($_.Exception.Response.StatusDescription)"
+            Write-LogMessage -type Verbose -MSG "Invoke-Rest: HTTP $statusCode $($_.Exception.Response.StatusDescription)"
             if ($statusCode -eq 401) {
                 $script:LastHttpError = 401
             }
@@ -285,13 +413,23 @@ function ConvertFrom-Epoch {
 }
 #endregion
 
+Write-LogMessage -type Info -MSG "Starting Get-SafeReport (v$ScriptVersion)" -Header
+Write-LogMessage -type Verbose -MSG "Setup: URL_Safes = $URL_Safes"
+Write-LogMessage -type Verbose -MSG "Setup: URL_Users = $URL_Users"
+
+# Parameter mutual-exclusion check before any API calls
+if ($IncludeGroups -and $GroupsOnly) {
+    Write-LogMessage -type Error -MSG '-IncludeGroups and -GroupsOnly cannot be combined. Use -IncludeGroups for users + groups, or -GroupsOnly for groups only.'
+    return
+}
+
 #region Authentication
 try {
     if ($null -ne $logonToken) {
         if ($logonToken.GetType().Name -eq 'String') {
             if ($logonToken.StartsWith('Bearer ')) {
                 # Identity/PCloud Bearer token - Privilege Cloud also requires X-IDAP-NATIVE-CLIENT
-                Write-Verbose 'Auth: logonToken is a Bearer string; adding X-IDAP-NATIVE-CLIENT header'
+                Write-LogMessage -type Verbose -MSG 'Auth: logonToken is a Bearer string; adding X-IDAP-NATIVE-CLIENT header'
                 $g_LogonHeader = @{
                     Authorization          = $logonToken
                     'X-IDAP-NATIVE-CLIENT' = 'true'
@@ -299,23 +437,23 @@ try {
             }
             else {
                 # Self-hosted PVWA token - raw opaque value, passed straight as the Authorization header value
-                Write-Verbose 'Auth: logonToken is a raw string; using as-is for Authorization header value'
+                Write-LogMessage -type Verbose -MSG 'Auth: logonToken is a raw string; using as-is for Authorization header value'
                 $g_LogonHeader = @{Authorization = $logonToken }
             }
         }
         else {
             # Hashtable already (e.g. from Get-IdentityHeader or New-Session when working correctly)
-            Write-Verbose "Auth: logonToken is $($logonToken.GetType().Name); using directly as header"
-            Write-Verbose "Auth: Header keys = [$($logonToken.Keys -join ', ')]"
+            Write-LogMessage -type Verbose -MSG "Auth: logonToken is $($logonToken.GetType().Name); using directly as header"
+            Write-LogMessage -type Verbose -MSG "Auth: Header keys = [$($logonToken.Keys -join ', ')]"
             $g_LogonHeader = $logonToken
         }
     }
     else {
-        Write-Verbose 'No logon token provided; performing self-hosted PVWA authentication'
+        Write-LogMessage -type Verbose -MSG 'No logon token provided; performing self-hosted PVWA authentication'
         if ($null -eq $PVWACredentials) {
             $PVWACredentials = Get-Credential -Message 'Enter PVWA credentials'
             if ($null -eq $PVWACredentials) {
-                Write-Error 'Credentials are required for self-hosted authentication'
+                Write-LogMessage -type Error -MSG 'Credentials are required for self-hosted authentication'
                 return
             }
         }
@@ -326,7 +464,7 @@ try {
         $logonTokenStr = Invoke-Rest -Command POST -URI $URL_Logon -Body $logonBody
         $logonBody = $null
         if ([string]::IsNullOrEmpty($logonTokenStr)) {
-            Write-Error 'Authentication failed: empty token returned'
+            Write-LogMessage -type Error -MSG 'Authentication failed: empty token returned'
             return
         }
         $g_LogonHeader = @{Authorization = $logonTokenStr }
@@ -334,75 +472,75 @@ try {
     }
 }
 catch {
-    Write-Error "Authentication failed: $($_.Exception.Message)"
+    Write-LogMessage -type Error -MSG "Authentication failed: $($_.Exception.Message)"
     return
 }
 #endregion
 
 #region Data Collection
-Write-Verbose "Data: PVWAURL = $PVWAURL"
-Write-Verbose "Data: URL_PVWAAPI = $URL_PVWAAPI"
+Write-LogMessage -type Verbose -MSG "Data: PVWAURL = $PVWAURL"
+Write-LogMessage -type Verbose -MSG "Data: URL_PVWAAPI = $URL_PVWAAPI"
 
-Write-Verbose 'Retrieving safes...'
+Write-LogMessage -type Verbose -MSG 'Retrieving safes...'
 [array]$allSafes = @()
 # Skip safe API when Members + no details + SafeName provided: names known, no safe details needed
 $skipSafeAPI = $Members.IsPresent -and -not $AllSafeDetails.IsPresent -and ($null -ne $SafeName)
 
 if ($skipSafeAPI) {
-    Write-Verbose "Safes: Members with named safes - skipping safe API ($($SafeName.Count) safe(s))"
+    Write-LogMessage -type Verbose -MSG "Safes: Members with named safes - skipping safe API ($($SafeName.Count) safe(s))"
     $allSafes = $SafeName | ForEach-Object { [pscustomobject]@{ SafeName = $_ } }
 }
 elseif ($SafeName) {
-    Write-Verbose "Safes: Targeted mode - $($SafeName.Count) safe(s) requested"
+    Write-LogMessage -type Verbose -MSG "Safes: Targeted mode - $($SafeName.Count) safe(s) requested"
     foreach ($name in $SafeName) {
         $encodedName = ConvertTo-URL -Text $name
-        Write-Verbose "Safes: GET ${URL_Safes}/$encodedName"
+        Write-LogMessage -type Verbose -MSG "Safes: GET ${URL_Safes}/$encodedName"
         $safeResponse = Invoke-Rest -Command GET -URI "${URL_Safes}/$encodedName" -Header $g_LogonHeader -ErrAction SilentlyContinue
         if ($null -eq $safeResponse) {
-            Write-Verbose "Safes: No response for '$name' - skipping"
+            Write-LogMessage -type Verbose -MSG "Safes: No response for '$name' - skipping"
         }
         else {
-            Write-Verbose "Safes: Found safe '$($safeResponse.SafeName)'"
+            Write-LogMessage -type Verbose -MSG "Safes: Found safe '$($safeResponse.SafeName)'"
             $allSafes += $safeResponse
         }
     }
 }
 else {
-    Write-Verbose 'Safes: Listing all safes (paginated)'
+    Write-LogMessage -type Verbose -MSG 'Safes: Listing all safes (paginated)'
     $safeUrl = "${URL_Safes}?limit=1000"
     do {
-        Write-Verbose "Safes: GET $safeUrl"
+        Write-LogMessage -type Verbose -MSG "Safes: GET $safeUrl"
         $safeResponse = Invoke-Rest -Command GET -URI $safeUrl -Header $g_LogonHeader -ErrAction SilentlyContinue
         if ($null -eq $safeResponse) {
-            Write-Verbose 'Safes: Response is null - API call failed (check verbose error above)'
+            Write-LogMessage -type Verbose -MSG 'Safes: Response is null - API call failed (check verbose error above)'
         }
         elseif (-not $safeResponse.value) {
-            Write-Verbose 'Safes: Response received but .value is empty'
-            Write-Verbose "Safes: Response properties = [$($safeResponse.PSObject.Properties.Name -join ', ')]"
-            Write-Verbose "Safes: Full response = $($safeResponse | ConvertTo-Json -Compress -Depth 3)"
+            Write-LogMessage -type Verbose -MSG 'Safes: Response received but .value is empty'
+            Write-LogMessage -type Verbose -MSG "Safes: Response properties = [$($safeResponse.PSObject.Properties.Name -join ', ')]"
+            Write-LogMessage -type Verbose -MSG "Safes: Full response = $($safeResponse | ConvertTo-Json -Compress -Depth 3)"
         }
         else {
-            Write-Verbose "Safes: Page returned $($safeResponse.value.Count) safes (total so far: $($allSafes.Count + $safeResponse.value.Count))"
+            Write-LogMessage -type Verbose -MSG "Safes: Page returned $($safeResponse.value.Count) safes (total so far: $($allSafes.Count + $safeResponse.value.Count))"
             $allSafes += $safeResponse.value
         }
         $safeUrl = if ($safeResponse -and $safeResponse.nextLink) { "$PVWAURL/$($safeResponse.nextLink)" } else { $null }
-        if ($safeUrl) { Write-Verbose 'Safes: nextLink found, continuing pagination' }
+        if ($safeUrl) { Write-LogMessage -type Verbose -MSG 'Safes: nextLink found, continuing pagination' }
     } while ($safeUrl)
 }
 
 if ($allSafes.Count -eq 0) {
     if ($script:LastHttpError -eq 401) {
-        Write-Error 'Authentication failed (HTTP 401). The logon token has expired or is invalid. Obtain a new token and try again.'
+        Write-LogMessage -type Error -MSG 'Authentication failed (HTTP 401). The logon token has expired or is invalid. Obtain a new token and try again.'
     }
     else {
-        Write-Warning 'No safes retrieved. Verify permissions and PVWA URL.'
+        Write-LogMessage -type Warning -MSG 'No safes retrieved. Verify permissions and PVWA URL.'
     }
     if ($script:DoLogoff) {
         Invoke-Rest -Command POST -URI $URL_Logoff -Header $g_LogonHeader -ErrAction SilentlyContinue | Out-Null
     }
     return
 }
-Write-Verbose "Retrieved $($allSafes.Count) safes total"
+Write-LogMessage -type Verbose -MSG "Retrieved $($allSafes.Count) safes total"
 
 # Filter system safes unless -IncludeSystemSafes is specified
 if (-not $IncludeSystemSafes.IsPresent) {
@@ -414,7 +552,7 @@ if (-not $IncludeSystemSafes.IsPresent) {
     $cpmApiResult = Invoke-Rest -Command GET -URI "${URL_PVWAAPI}/ComponentsMonitoringDetails/CPM/" -Header $g_LogonHeader -ErrAction SilentlyContinue
     if ($null -ne $cpmApiResult -and -not [string]::IsNullOrEmpty($cpmApiResult.ComponentsDetails.ComponentUSername)) {
         $cpmUsers = @($cpmApiResult.ComponentsDetails.ComponentUSername)
-        Write-Verbose "SystemSafes: $($cpmUsers.Count) CPM user(s) found - adding CPM safes to exclusion list"
+        Write-LogMessage -type Verbose -MSG "SystemSafes: $($cpmUsers.Count) CPM user(s) found - adding CPM safes to exclusion list"
         foreach ($cpmUser in $cpmUsers) {
             $allExcluded += $cpmUser
             $allExcluded += "${cpmUser}_Accounts"
@@ -424,20 +562,20 @@ if (-not $IncludeSystemSafes.IsPresent) {
         }
     }
     else {
-        Write-Verbose 'SystemSafes: CPM users unavailable (non-admin account or API inaccessible) - CPM safes will not be excluded'
+        Write-LogMessage -type Verbose -MSG 'SystemSafes: CPM users unavailable (non-admin account or API inaccessible) - CPM safes will not be excluded'
     }
 
     $beforeCount = $allSafes.Count
     $allSafes = @($allSafes | Where-Object { $_.SafeName -notin $allExcluded })
     $excluded = $beforeCount - $allSafes.Count
-    if ($excluded -gt 0) { Write-Verbose "SystemSafes: excluded $excluded system/CPM safe(s) (use -IncludeSystemSafes to include them)" }
+    if ($excluded -gt 0) { Write-LogMessage -type Verbose -MSG "SystemSafes: excluded $excluded system/CPM safe(s) (use -IncludeSystemSafes to include them)" }
 }
 else {
-    Write-Verbose 'SystemSafes: -IncludeSystemSafes set - system and CPM safes included'
+    Write-LogMessage -type Verbose -MSG 'SystemSafes: -IncludeSystemSafes set - system and CPM safes included'
 }
 
 if ($allSafes.Count -eq 0) {
-    Write-Warning 'No safes remain after filtering. Use -IncludeSystemSafes to include system safes.'
+    Write-LogMessage -type Warning -MSG 'No safes remain after filtering. Use -IncludeSystemSafes to include system safes.'
     if ($script:DoLogoff) {
         Invoke-Rest -Command POST -URI $URL_Logoff -Header $g_LogonHeader -ErrAction SilentlyContinue | Out-Null
     }
@@ -448,7 +586,7 @@ if ($allSafes.Count -eq 0) {
 # safe individually via GET /api/Safes/{SafeUrlId} to get quota and usedQuota.
 # Targeted -SafeName runs already call individual endpoints so no re-fetch needed there.
 if ($IncludeQuota -and -not $SafeName) {
-    Write-Verbose "IncludeQuota: Re-fetching $($allSafes.Count) safe(s) individually for quota data..."
+    Write-LogMessage -type Verbose -MSG "IncludeQuota: Re-fetching $($allSafes.Count) safe(s) individually for quota data..."
     [array]$detailedSafes = @()
     foreach ($safe in $allSafes) {
         $encodedName = ConvertTo-URL -Text $safe.SafeName
@@ -456,19 +594,19 @@ if ($IncludeQuota -and -not $SafeName) {
         if ($null -ne $detailResponse) {
             $detailedSafes += $detailResponse
         } else {
-            Write-Verbose "IncludeQuota: No detail response for '$($safe.SafeName)' - quota will be null"
+            Write-LogMessage -type Verbose -MSG "IncludeQuota: No detail response for '$($safe.SafeName)' - quota will be null"
             $detailedSafes += $safe
         }
     }
     $allSafes = $detailedSafes
-    Write-Verbose "IncludeQuota: Individual fetch complete ($($allSafes.Count) safes)"
+    Write-LogMessage -type Verbose -MSG "IncludeQuota: Individual fetch complete ($($allSafes.Count) safes)"
 }
 
 if (-not $Members.IsPresent) {
-    Write-Verbose 'Safe inventory mode'
+    Write-LogMessage -type Verbose -MSG 'Safe inventory mode'
     if ($EPVFormat) {
         # Fixed column schema required for pipe compatibility with Import-Safe / New-Safe / Set-Safe
-        Write-Verbose 'Safe inventory: EPV-API-Common format (Import-Safe | New-Safe / Set-Safe)'
+        Write-LogMessage -type Verbose -MSG 'Safe inventory: EPV-API-Common format (Import-Safe | New-Safe / Set-Safe)'
         $epvSafeRows = $allSafes | ForEach-Object {
             [pscustomobject]@{
                 'Safe Name'                   = $_.safeName
@@ -483,7 +621,7 @@ if (-not $Members.IsPresent) {
         }
         if (-not [string]::IsNullOrEmpty($ReportPath)) {
             $epvSafeRows | Export-Csv -Path $ReportPath -NoTypeInformation
-            Write-Host "EPV-API-Common safe inventory written to: $ReportPath ($($allSafes.Count) safes)"
+            Write-LogMessage -type Info -MSG "EPV-API-Common safe inventory written to: $ReportPath ($($allSafes.Count) safes)"
         }
         else {
             $epvSafeRows
@@ -510,7 +648,7 @@ if (-not $Members.IsPresent) {
         $safeInvRows = $allSafes | Select-Object -Property $safeInvProps
         if (-not [string]::IsNullOrEmpty($ReportPath)) {
             $safeInvRows | Export-Csv -Path $ReportPath -NoTypeInformation
-            Write-Host "Safe inventory written to: $ReportPath ($($allSafes.Count) safes)"
+            Write-LogMessage -type Info -MSG "Safe inventory written to: $ReportPath ($($allSafes.Count) safes)"
         }
         else {
             $safeInvRows
@@ -529,20 +667,20 @@ $allSafes | ForEach-Object { $safesHT[$_.SafeName] = $_ }
 # Users API needed when -Members -AllSafeDetails or -Members -IncludeSource is used
 [hashtable]$usersHT = @{}
 if ($Members.IsPresent -and ($AllSafeDetails.IsPresent -or $IncludeSource.IsPresent)) {
-    Write-Verbose 'Retrieving users for Source/UserType enrichment (-Members -AllSafeDetails / -IncludeSource)...'
+    Write-LogMessage -type Verbose -MSG 'Retrieving users for Source/UserType enrichment (-Members -AllSafeDetails / -IncludeSource)...'
     $userUrl = "${URL_Users}?limit=1000"
     do {
-        Write-Verbose "Users: GET $userUrl"
+        Write-LogMessage -type Verbose -MSG "Users: GET $userUrl"
         $userResponse = Invoke-Rest -Command GET -URI $userUrl -Header $g_LogonHeader -ErrAction SilentlyContinue
         if ($null -eq $userResponse) {
-            Write-Verbose 'Users: Response is null - UserType/Source enrichment will be unavailable'
+            Write-LogMessage -type Verbose -MSG 'Users: Response is null - UserType/Source enrichment will be unavailable'
         }
         elseif (-not $userResponse.Users) {
-            Write-Verbose "Users: Response received but .Users is empty"
-            Write-Verbose "Users: Response properties = [$($userResponse.PSObject.Properties.Name -join ', ')]"
+            Write-LogMessage -type Verbose -MSG "Users: Response received but .Users is empty"
+            Write-LogMessage -type Verbose -MSG "Users: Response properties = [$($userResponse.PSObject.Properties.Name -join ', ')]"
         }
         else {
-            Write-Verbose "Users: Page returned $($userResponse.Users.Count) users"
+            Write-LogMessage -type Verbose -MSG "Users: Page returned $($userResponse.Users.Count) users"
             $userResponse.Users | ForEach-Object {
                 if (-not $usersHT.ContainsKey($_.username)) {
                     $usersHT[$_.username] = $_
@@ -551,32 +689,32 @@ if ($Members.IsPresent -and ($AllSafeDetails.IsPresent -or $IncludeSource.IsPres
         }
         $userUrl = if ($userResponse -and $userResponse.nextLink) { "$PVWAURL/$($userResponse.nextLink)" } else { $null }
     } while ($userUrl)
-    Write-Verbose "Users: $($usersHT.Count) total users loaded"
+    Write-LogMessage -type Verbose -MSG "Users: $($usersHT.Count) total users loaded"
 }
 else {
-    Write-Verbose 'Users: API skipped (not needed for this mode)'
+    Write-LogMessage -type Verbose -MSG 'Users: API skipped (not needed for this mode)'
 }
 
 # -IncludeSystemMembers bypasses both the name-based exclude list and the vault predefined-user API filter
 $inclPred = if ($IncludeSystemMembers) { 'true' } else { 'false' }
 
-Write-Verbose 'Retrieving safe members...'
+Write-LogMessage -type Verbose -MSG 'Retrieving safe members...'
 [array]$allSafeMembers = @()
 foreach ($safe in $allSafes) {
     $encodedName = ConvertTo-URL -Text $safe.SafeName
     $memberUrl = "$URL_Safes/$encodedName/Members?includePredefinedUsers=$inclPred&limit=500"
-    Write-Verbose "Members: Processing safe '$($safe.SafeName)'"
+    Write-LogMessage -type Verbose -MSG "Members: Processing safe '$($safe.SafeName)'"
     do {
-        Write-Verbose "Members: GET $memberUrl"
+        Write-LogMessage -type Verbose -MSG "Members: GET $memberUrl"
         $memberResponse = Invoke-Rest -Command GET -URI $memberUrl -Header $g_LogonHeader -ErrAction SilentlyContinue
         if ($null -eq $memberResponse) {
-            Write-Verbose "Members: Response null for safe '$($safe.SafeName)' - skipping"
+            Write-LogMessage -type Verbose -MSG "Members: Response null for safe '$($safe.SafeName)' - skipping"
         }
         elseif (-not $memberResponse.value) {
-            Write-Verbose "Members: No members returned for safe '$($safe.SafeName)'"
+            Write-LogMessage -type Verbose -MSG "Members: No members returned for safe '$($safe.SafeName)'"
         }
         else {
-            Write-Verbose "Members: $($memberResponse.value.Count) members returned for safe '$($safe.SafeName)'"
+            Write-LogMessage -type Verbose -MSG "Members: $($memberResponse.value.Count) members returned for safe '$($safe.SafeName)'"
             foreach ($member in $memberResponse.value) {
                 $member | Add-Member -MemberType NoteProperty -Name 'SafeInfo' -Value $safesHT[$safe.SafeName] -Force
                 $member | Add-Member -MemberType NoteProperty -Name 'UserInfo' -Value $usersHT[$member.memberName] -Force
@@ -586,7 +724,7 @@ foreach ($safe in $allSafes) {
         $memberUrl = if ($memberResponse -and $memberResponse.nextLink) { "$PVWAURL/$($memberResponse.nextLink)" } else { $null }
     } while ($memberUrl)
 }
-Write-Verbose "Members: $($allSafeMembers.Count) total safe member records retrieved"
+Write-LogMessage -type Verbose -MSG "Members: $($allSafeMembers.Count) total safe member records retrieved"
 #endregion
 
 #region Filtering
@@ -610,18 +748,18 @@ elseif (-not $IncludeGroups) {
 # else: -IncludeGroups = users + groups
 
 if ($filteredMembers.Count -eq 0) {
-    Write-Warning 'No safe members found matching the specified filters. Expand search parameters and try again.'
+    Write-LogMessage -type Warning -MSG 'No safe members found matching the specified filters. Expand search parameters and try again.'
     if ($script:DoLogoff) {
         Invoke-Rest -Command POST -URI $URL_Logoff -Header $g_LogonHeader -ErrAction SilentlyContinue | Out-Null
     }
     return
 }
-Write-Verbose "Filtered to $($filteredMembers.Count) members"
+Write-LogMessage -type Verbose -MSG "Filtered to $($filteredMembers.Count) members"
 #endregion
 
 #region Output: Member format (-Members)
 # Safe-Management.ps1 compatible (-AddMembers / -UpdateMembers -FilePath)
-Write-Verbose 'Building member output...'
+Write-LogMessage -type Verbose -MSG 'Building member output...'
 
 $smExportParams = @{
     Path              = $ReportPath
@@ -629,7 +767,7 @@ $smExportParams = @{
 }
 if ($EPVFormat) {
     # Fixed column schema required for pipe compatibility with Import-SafeMember / Add-SafeMember
-    Write-Verbose 'Member output: EPV-API-Common format (Import-SafeMember | Add-SafeMember)'
+    Write-LogMessage -type Verbose -MSG 'Member output: EPV-API-Common format (Import-SafeMember | Add-SafeMember)'
     $epvRows = $filteredMembers | ForEach-Object {
         $p = $_.permissions
         $mt = if ($_.memberType -eq 'User') { 'User' }
@@ -665,7 +803,7 @@ if ($EPVFormat) {
     }
     if (-not [string]::IsNullOrEmpty($ReportPath)) {
         $epvRows | Sort-Object -Property 'Safe Name', 'Member Name' | Export-Csv @smExportParams
-        Write-Host "EPV-API-Common member report written to: $ReportPath ($($epvRows.Count) records)"
+        Write-LogMessage -type Info -MSG "EPV-API-Common member report written to: $ReportPath ($($epvRows.Count) records)"
     }
     else {
         $epvRows | Sort-Object -Property 'Safe Name', 'Member Name'
@@ -756,10 +894,10 @@ else {
 
     if (-not [string]::IsNullOrEmpty($ReportPath)) {
         $smRows | Select-Object -Property $smOutputProps | Sort-Object -Property member, safename | Export-Csv @smExportParams
-        Write-Host "Safe-Management report written to: $ReportPath ($($smRows.Count) records)"
+        Write-LogMessage -type Info -MSG "Safe-Management report written to: $ReportPath ($($smRows.Count) records)"
     }
     else {
-        Write-Verbose 'ReportPath not specified - writing to pipeline'
+        Write-LogMessage -type Verbose -MSG 'ReportPath not specified - writing to pipeline'
         $smRows | Select-Object -Property $smOutputProps | Sort-Object -Property member, safename
     }
 }
@@ -767,8 +905,10 @@ else {
 
 #region Logoff
 if ($script:DoLogoff) {
-    Write-Verbose 'Logging off self-hosted PVWA session'
+    Write-LogMessage -type Verbose -MSG 'Logging off self-hosted PVWA session'
     Invoke-Rest -Command POST -URI $URL_Logoff -Header $g_LogonHeader -ErrAction SilentlyContinue | Out-Null
 }
 #endregion
+
+Write-LogMessage -type Info -MSG 'Script ended' -Footer
 
