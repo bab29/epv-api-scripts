@@ -21,8 +21,14 @@
 .PARAMETER Destination
     Local folder for ZIPs, architecture subfolders, and a new TNS_ADMIN folder.
     Default: C:\Oracle\. Existing registered clients and machine TNS_ADMIN may be elsewhere.
-    Must exist when downloading/extracting packages or creating TNS_ADMIN. Read-only
+    If needed but missing, creation requires confirmation or CreateDestination. Read-only
     verification and removal do not require an otherwise unused Destination to exist.
+
+.PARAMETER CreateDestination
+    Approve creation of a missing Destination without prompting. Does not bypass path,
+    parent access, disk-space, or other prechecks. Existing folders are left intact.
+    PreCheckOnly reports planned creation but never creates folders.
+    Only applies to full setup, DownloadOnly, ExtractOnly, ConfigureOnly, and PreCheckOnly.
 
 .PARAMETER Version
     Pinned Oracle Instant Client major version: 19, 21 or 23. Default: 19.
@@ -267,6 +273,16 @@ param (
     [Parameter(ParameterSetName = 'Download')]
     [switch]$OverwritePackages,
 
+    [Parameter(ParameterSetName = 'Full')]
+    [Parameter(ParameterSetName = 'FullLocal')]
+    [Parameter(ParameterSetName = 'Download')]
+    [Parameter(ParameterSetName = 'Extract')]
+    [Parameter(ParameterSetName = 'ExtractLocal')]
+    [Parameter(ParameterSetName = 'Configure')]
+    [Parameter(ParameterSetName = 'PreCheck')]
+    [Parameter(ParameterSetName = 'PreCheckLocal')]
+    [switch]$CreateDestination,
+
     [Parameter(Mandatory, ParameterSetName = 'Uninstall')]
     [switch]$UninstallOnly,
 
@@ -499,6 +515,34 @@ function Assert-WritableDirectory {
             throw "Directory ACL does not permit the current token to write '$Path'."
         }
     } finally { $identity.Dispose() }
+}
+
+function Assert-DestinationReady {
+    Assert-NoReparsePath $Destination
+    if (Test-Path -LiteralPath $Destination) {
+        Assert-WritableDirectory $Destination
+        return
+    }
+    $parent = Split-Path $Destination -Parent
+    while ($parent -and -not (Test-Path -LiteralPath $parent)) {
+        $parent = Split-Path $parent -Parent
+    }
+    if (-not $parent) { throw "No existing parent found for Destination '$Destination'." }
+    Assert-WritableDirectory $parent
+    $script:destinationCreationNeeded = $true
+    Write-Host "  Destination '$Destination' is missing; creation is required. Existing parent: '$parent'."
+}
+
+function Initialize-Destination {
+    if (-not $destinationCreationNeeded) { return }
+    Confirm-Operation "Create missing destination folder '$Destination' (including missing parent folders)?" `
+        'CreateDestination' $CreateDestination.IsPresent
+    Assert-DestinationReady
+    if (-not (Test-Path -LiteralPath $Destination -PathType Container)) {
+        [System.IO.Directory]::CreateDirectory($Destination) | Out-Null
+    }
+    Assert-WritableDirectory $Destination
+    Write-Host "  Verified destination: '$Destination'."
 }
 
 function Assert-Runtime {
@@ -952,19 +996,20 @@ if ($removal) { Invoke-Removal; return }
 #region Mandatory operation-specific PreCheck
 
 Write-Host "`nPreCheck: operation readiness..."
+$destinationCreationNeeded = $false
 $errors = [System.Collections.Generic.List[string]]::new()
 $needsPrincipals = $fullRun -or $PreCheckOnly -or $PermissionsOnly
 $needsAdmin = $needsPrincipals -or $InstallOnly -or $ConfigureOnly
 if ($needsAdmin) { Invoke-Check $errors { Assert-Administrator } }
 if ($needsPrincipals) { Invoke-Check $errors { Resolve-ServicePrincipals } }
 if ($DownloadOnly -or $ExtractOnly) {
-    Invoke-Check $errors { Assert-WritableDirectory $Destination; Assert-DiskSpace 1 }
+    Invoke-Check $errors { Assert-DestinationReady; Assert-DiskSpace 1 }
 }
 $tns = $null
 if ($fullRun -or $PreCheckOnly -or $ConfigureOnly -or $PermissionsOnly) {
     Invoke-Check $errors { $script:tns = Resolve-TnsFolder }
     if ($tns -and -not $tns.MachineValue -and -not $PermissionsOnly) {
-        Invoke-Check $errors { Assert-WritableDirectory $Destination }
+        Invoke-Check $errors { Assert-DestinationReady }
     }
     if ($PermissionsOnly -and $tns) {
         Invoke-Check $errors {
@@ -986,7 +1031,7 @@ if (-not $DownloadOnly) {
 }
 $missingPlans = @($plans | Where-Object { $null -eq $_.Driver })
 if (($fullRun -or $PreCheckOnly) -and $missingPlans.Count) {
-    Invoke-Check $errors { Assert-WritableDirectory $Destination; Assert-DiskSpace 1 }
+    Invoke-Check $errors { Assert-DestinationReady; Assert-DiskSpace 1 }
 }
 if ($fullRun -or $PreCheckOnly -or $InstallOnly) {
     foreach ($plan in $plans) { Invoke-Check $errors { Assert-Runtime $plan.Architecture } }
@@ -1030,6 +1075,7 @@ Complete-PreCheck $errors
 if ($PreCheckOnly) { Write-Host 'PreCheck complete; no changes made.'; return }
 if ($VerifyInstallationOnly) { Write-Host 'Installation verified; no changes made.'; return }
 if ($fullRun -or $InstallOnly -or $ConfigureOnly -or $PermissionsOnly) { Confirm-ExistingClients }
+Initialize-Destination
 
 #endregion
 
