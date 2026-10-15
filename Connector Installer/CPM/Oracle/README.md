@@ -122,10 +122,13 @@ Copy the script and ZIPs to the connector. DownloadOnly prints an offline setup 
 For alternate local filenames:
 
 ```powershell
-.\Manage-OracleInstantClient.ps1 -Destination 'C:\Oracle' `
-    -BasicFile 'basic.zip' `
-    -SqlPlusFile 'sqlplus.zip' `
-    -OdbcFile 'odbc.zip'
+$setup = @{
+    Destination = 'C:\Oracle'
+    BasicFile = 'basic.zip'
+    SqlPlusFile = 'sqlplus.zip'
+    OdbcFile = 'odbc.zip'
+}
+.\Manage-OracleInstantClient.ps1 @setup
 ```
 
 - Supply **all three** parameters together.
@@ -139,10 +142,13 @@ For alternate local filenames:
 For two architectures, filenames follow the order supplied to `-Architecture`:
 
 ```powershell
-.\Manage-OracleInstantClient.ps1 -Architecture 32,64 `
-    -BasicFile 'basic32.zip','basic64.zip' `
-    -SqlPlusFile 'sqlplus32.zip','sqlplus64.zip' `
-    -OdbcFile 'odbc32.zip','odbc64.zip'
+$setup = @{
+    Architecture = @('32', '64')
+    BasicFile = @('basic32.zip', 'basic64.zip')
+    SqlPlusFile = @('sqlplus32.zip', 'sqlplus64.zip')
+    OdbcFile = @('odbc32.zip', 'odbc64.zip')
+}
+.\Manage-OracleInstantClient.ps1 @setup
 ```
 
 Default extraction locations:
@@ -230,8 +236,7 @@ Removal is never part of the default setup workflow.
 .\Manage-OracleInstantClient.ps1 -CleanupOnly
 
 # Clean a client previously installed elsewhere
-.\Manage-OracleInstantClient.ps1 -CleanupOnly `
-    -ClientPath 'D:\Oracle\instantclient_19_32'
+.\Manage-OracleInstantClient.ps1 -CleanupOnly -ClientPath 'D:\Oracle\instantclient_19_32'
 
 # Combined operation, still prompting for approval
 .\Manage-OracleInstantClient.ps1 -UninstallAndCleanup

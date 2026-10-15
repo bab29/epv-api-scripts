@@ -325,10 +325,11 @@ foreach ($name in @('DownloadOnly', 'PreCheckOnly', 'ExtractOnly', 'InstallOnly'
     'VerifyInstallationOnly', 'ConfigureOnly', 'PermissionsOnly', 'UninstallOnly',
     'CleanupOnly', 'UninstallAndCleanup')) {
     if ($PSBoundParameters.ContainsKey($name) -and -not $PSBoundParameters[$name]) {
-        throw "Do not pass -${name}:`$false. Omit the operation switch to run the full workflow."
+        throw ('Do not pass -{0}:$false. Omit the operation switch to run the full workflow.' -f $name)
     }
 }
 $OracleVariable = 'TNS_ADMIN'
+$newLine = [Environment]::NewLine
 
 # See .NOTES for download pages and the release-maintenance checklist.
 $VersionConfig = @{
@@ -403,8 +404,12 @@ function Resolve-ServicePrincipals {
                 Get-Service -Name ($user -replace '^NT SERVICE\\', '') -ErrorAction Stop | Out-Null
             } else {
                 $localName = ($user -split '\\')[-1]
-                $accounts = @(Get-CimInstance -ClassName Win32_UserAccount `
-                    -Filter "LocalAccount=True AND Name='$localName' AND Domain='$env:COMPUTERNAME'" -ErrorAction Stop)
+                $accountQuery = @{
+                    ClassName = 'Win32_UserAccount'
+                    Filter = "LocalAccount=True AND Name='$localName' AND Domain='$env:COMPUTERNAME'"
+                    ErrorAction = 'Stop'
+                }
+                $accounts = @(Get-CimInstance @accountQuery)
                 if ($accounts.Count -ne 1) { throw "Local user '$localName' does not exist uniquely on this machine." }
             }
             $ServiceSids[$user] = [System.Security.Principal.NTAccount]::new($user).Translate(
@@ -412,7 +417,7 @@ function Resolve-ServicePrincipals {
             )
         } catch { $errors.Add("Cannot resolve '$user': $($_.Exception.Message)") }
     }
-    if ($errors.Count) { throw ($errors -join "`n") }
+    if ($errors.Count) { throw ($errors -join $newLine) }
 }
 
 function Confirm-Operation {
@@ -535,8 +540,12 @@ function Assert-DestinationReady {
 
 function Initialize-Destination {
     if (-not $destinationCreationNeeded) { return }
-    Confirm-Operation "Create missing destination folder '$Destination' (including missing parent folders)?" `
-        'CreateDestination' $CreateDestination.IsPresent
+    $confirmation = @{
+        Message = "Create missing destination folder '$Destination' (including missing parent folders)?"
+        OverrideName = 'CreateDestination'
+        Approved = $CreateDestination.IsPresent
+    }
+    Confirm-Operation @confirmation
     Assert-DestinationReady
     if (-not (Test-Path -LiteralPath $Destination -PathType Container)) {
         [System.IO.Directory]::CreateDirectory($Destination) | Out-Null
@@ -689,7 +698,7 @@ function Invoke-Check {
 
 function Complete-PreCheck {
     param([System.Collections.Generic.List[string]]$Errors)
-    if ($Errors.Count) { throw ("PreCheck failed:`n - " + ($Errors -join "`n - ")) }
+    if ($Errors.Count) { throw ("PreCheck failed:${newLine} - " + ($Errors -join "${newLine} - ")) }
     Write-Host '  PreCheck passed.'
 }
 
@@ -715,10 +724,14 @@ function Find-SelectedClients {
 function Confirm-ExistingClients {
     $existing = @($plans | Where-Object { $null -ne $_.Driver })
     if (-not $existing.Count) { return }
-    $details = @($existing | ForEach-Object { "$driverName [$($_.Platform)] -> $($_.ClientDir)" }) -join "`n"
+    $details = @($existing | ForEach-Object { "$driverName [$($_.Platform)] -> $($_.ClientDir)" }) -join $newLine
     $tnsDescription = if ($tns) { $tns.Path } else { '(not modified by this operation)' }
-    Confirm-Operation "Existing installations found:`n$details`nUse these locations without reinstalling? TNS_ADMIN: '$tnsDescription'." `
-        'UseExistingInstallation' $UseExistingInstallation.IsPresent
+    $confirmation = @{
+        Message = "Existing installations found:${newLine}${details}${newLine}Use these locations without reinstalling? TNS_ADMIN: '$tnsDescription'."
+        OverrideName = 'UseExistingInstallation'
+        Approved = $UseExistingInstallation.IsPresent
+    }
+    Confirm-Operation @confirmation
 }
 
 function Assert-CurrentRegistration {
@@ -882,7 +895,7 @@ function Get-SafeCleanupItems {
 }
 
 function Invoke-Removal {
-    Write-Host "`nPreCheck: removal readiness..."
+    Write-Host "${newLine}PreCheck: removal readiness..."
     $errors = [System.Collections.Generic.List[string]]::new()
     Invoke-Check $errors { Assert-Administrator }
     $drivers = @(Get-AllDrivers)
@@ -941,8 +954,12 @@ function Invoke-Removal {
     if (-not $CleanupOnly) { $details += @($plans | ForEach-Object { "Unregister: $driverName [$($_.Platform)] from '$($_.ClientDir)'." }) }
     $details += @($cleanup | ForEach-Object { "Delete: '$($_.Path)'." })
     if (-not $details.Count) { Write-Host 'Nothing to clean up; selected paths are already absent.'; return }
-    Confirm-Operation (($details -join "`n") + "`nTNS_ADMIN and DSNs are preserved. Stop applications using these clients before continuing.") `
-        'ForceRemoval' $ForceRemoval.IsPresent
+    $confirmation = @{
+        Message = ($details -join $newLine) + "${newLine}TNS_ADMIN and DSNs are preserved. Stop applications using these clients before continuing."
+        OverrideName = 'ForceRemoval'
+        Approved = $ForceRemoval.IsPresent
+    }
+    Confirm-Operation @confirmation
     if (-not $CleanupOnly) {
         foreach ($plan in $plans) {
             $currentDrivers = @(Get-AllDrivers)
@@ -995,7 +1012,7 @@ if ($removal) { Invoke-Removal; return }
 
 #region Mandatory operation-specific PreCheck
 
-Write-Host "`nPreCheck: operation readiness..."
+Write-Host "${newLine}PreCheck: operation readiness..."
 $destinationCreationNeeded = $false
 $errors = [System.Collections.Generic.List[string]]::new()
 $needsPrincipals = $fullRun -or $PreCheckOnly -or $PermissionsOnly
@@ -1094,9 +1111,9 @@ if ($DownloadOnly -or ($fullRun -and -not $localPackages)) {
         }
     })
     if ($existingPackages.Count) {
-        Confirm-Operation ("Overwrite existing packages?`n" + ($existingPackages -join "`n")) 'OverwritePackages' $OverwritePackages.IsPresent
+        Confirm-Operation ("Overwrite existing packages?${newLine}" + ($existingPackages -join $newLine)) 'OverwritePackages' $OverwritePackages.IsPresent
     }
-    if (@($downloadPlans).Count) { Write-Host "`nDownload: Oracle $($VersionConfig[$Version].Release) packages..." }
+    if (@($downloadPlans).Count) { Write-Host "${newLine}Download: Oracle $($VersionConfig[$Version].Release) packages..." }
     foreach ($plan in $downloadPlans) {
         for ($index = 0; $index -lt 3; $index++) {
             $path = Join-Path $Destination $plan.Files[$index]
@@ -1122,14 +1139,19 @@ if ($DownloadOnly -or ($fullRun -and -not $localPackages)) {
 }
 if ($fullRun -or $ExtractOnly) {
     foreach ($plan in $missingPlans) {
-        Write-Host "`nExtract: $($plan.Platform)..."
+        Write-Host "${newLine}Extract: $($plan.Platform)..."
         Assert-UnregisteredPath $plan.StandardPath @(Get-AllDrivers)
         if (Test-Path -LiteralPath $plan.StandardPath -PathType Container) {
             Get-CheckedTree $plan.StandardPath | Out-Null
         }
         foreach ($file in $plan.Files) {
-            Expand-Archive -LiteralPath (Join-Path $Destination $file) `
-                -DestinationPath (Split-Path $plan.StandardPath -Parent) -Force -ErrorAction Stop
+            $archiveParameters = @{
+                LiteralPath = Join-Path $Destination $file
+                DestinationPath = Split-Path $plan.StandardPath -Parent
+                Force = $true
+                ErrorAction = 'Stop'
+            }
+            Expand-Archive @archiveParameters
         }
         Assert-ClientFiles $plan.StandardPath $plan.Architecture -Installer
     }
@@ -1137,7 +1159,7 @@ if ($fullRun -or $ExtractOnly) {
 }
 if ($fullRun -or $InstallOnly) {
     foreach ($plan in $missingPlans) {
-        Write-Host "`nInstall: $($plan.Platform) at '$($plan.StandardPath)'..."
+        Write-Host "${newLine}Install: $($plan.Platform) at '$($plan.StandardPath)'..."
         $currentDrivers = @(Get-AllDrivers)
         if (@($currentDrivers | Where-Object { $_.Name -ieq $driverName -and $_.Platform -eq $plan.Platform }).Count) {
             throw "A selected registration appeared after PreCheck for $($plan.Platform). Rerun to review it before installation."
@@ -1162,7 +1184,7 @@ if ($fullRun -or $InstallOnly) {
 #region Configure and Permissions
 
 if ($fullRun -or $ConfigureOnly) {
-    Write-Host "`nConfigure: TNS_ADMIN..."
+    Write-Host "${newLine}Configure: TNS_ADMIN..."
     Assert-CurrentRegistration
     $current = Resolve-TnsFolder
     if ($current.Path -ine $tns.Path -or $current.MachineValue -cne $tns.MachineValue) {
@@ -1185,7 +1207,7 @@ if ($fullRun -or $ConfigureOnly) {
     }
 }
 if ($fullRun -or $PermissionsOnly) {
-    Write-Host "`nPermissions: $PermissionSet principals..."
+    Write-Host "${newLine}Permissions: $PermissionSet principals..."
     $current = Resolve-TnsFolder
     if ($current.Path -ine $tns.Path) { throw 'TNS_ADMIN changed since PreCheck. Rerun before granting permissions.' }
     Assert-CurrentRegistration
